@@ -1,10 +1,10 @@
-import shutil, os, stat
+import shutil, os, stat, json
 
 # --- User Configuration ---
 SOURCES = [
     "in_game",
     "main_menu",
-    # "LICENSE",
+    # "LICENSE", - example of adding a file
 ]
 
 RELEASE_NAME = "release"
@@ -17,12 +17,12 @@ RELEASE_PATH = os.path.join(ROOT_DIR, RELEASE_NAME)
 EXTERNAL_DEST = os.path.join(os.path.dirname(ROOT_DIR), TARGET_DIR_NAME)
 
 # --- Functions ---
-# This fixes the [WinError 5] Access is denied error
 def on_rm_error(func, path, exc_info):
     os.chmod(path, stat.S_IWRITE)
     func(path)
 
 # --- Execution ---
+
 # 1. Sync Sources to Release Folder
 if not os.path.exists(RELEASE_PATH):
     os.makedirs(RELEASE_PATH)
@@ -38,19 +38,33 @@ for item in SOURCES:
             shutil.copy(src_path, dest_path)
 
 # 2. Deploy to External Directory
-# We delete the old folder first to ensure a clean install
 if os.path.exists(EXTERNAL_DEST):
-    # The 'onerror' argument calls our helper if deletion fails (e.g., read-only files)
     shutil.rmtree(EXTERNAL_DEST, onerror=on_rm_error)
 
 shutil.copytree(RELEASE_PATH, EXTERNAL_DEST)
 
-# 3. Rename Metadata in External Directory
-meta_folder = os.path.join(EXTERNAL_DEST, ".metadata")
-meta_src = os.path.join(meta_folder, "release-metadata.json")
-meta_dest = os.path.join(meta_folder, "metadata.json")
+# 3. Generate Release Metadata
+dev_meta_path = os.path.join(ROOT_DIR, ".metadata", "metadata.json")
+dest_meta_dir = os.path.join(EXTERNAL_DEST, ".metadata")
+dest_meta_path = os.path.join(dest_meta_dir, "metadata.json")
 
-os.replace(meta_src, meta_dest)
+if os.path.exists(dev_meta_path):
+    if not os.path.exists(dest_meta_dir):
+        os.makedirs(dest_meta_dir)
+
+    with open(dev_meta_path, "r", encoding="utf-8-sig") as f:
+        data = json.load(f)
+
+    if "name" in data:
+        data["name"] = data["name"].replace(" Dev", "")
+
+    if "id" in data:
+        data["id"] = data["id"].replace(".dev", "")
+
+    with open(dest_meta_path, "w", encoding="utf-8-sig") as f:
+        json.dump(data, f, indent=4)
+else:
+    print(f"Warning: Source metadata not found at {dev_meta_path}")
 
 # 4. Cleanup Release Folder
 for item in os.listdir(RELEASE_PATH):
