@@ -45,6 +45,7 @@ if os.path.exists(git_dir):
     current_url = run_git(["remote", "get-url", "origin"])
     if current_url and "conner-olsen/eu5-mod-devkit" in current_url:
         shutil.rmtree(git_dir, onerror=on_rm_error)
+
 # 2. Initialize Git if missing
 if not os.path.exists(git_dir):
     run_git(["init"])
