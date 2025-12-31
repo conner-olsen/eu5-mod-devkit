@@ -1,6 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto eol=crlf
 
-prepare-release.sh text eol=lf
-assets/** -text
-main_menu/gfx/** -text
+# Force LF for all shell scripts
+*.sh text eol=lf
