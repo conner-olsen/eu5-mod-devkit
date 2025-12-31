@@ -15,7 +15,7 @@ git rm -rf .
 git checkout main -- .
 
 # 4. Remove this script
-git rm create-devkit-release.sh
+git rm -f create-devkit-release.sh
 
 # 5. Commit and Push
 git commit -m "$VERSION"
