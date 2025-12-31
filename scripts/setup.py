@@ -47,9 +47,11 @@ if os.path.exists(git_dir):
         shutil.rmtree(git_dir, onerror=on_rm_error)
 
 # 2. Initialize Git if missing
+is_new_repo = False
 if not os.path.exists(git_dir):
     run_git(["init"])
     run_git(["branch", "-M", "main"])
+    is_new_repo = True
 
 # 3. Clone Devkit to Temp Directory
 if os.path.exists(TEMP_DIR):
@@ -82,7 +84,12 @@ if os.path.exists(TEMP_DIR):
 run_git(["remote", "add", REMOTE_NAME, DEVKIT_URL])
 run_git(["fetch", REMOTE_NAME, f"main:{TARGET_BRANCH}"])
 
-# 6. Self-Destruct
+# 6. Create Initial Commit (Only for new repos)
+if is_new_repo:
+    run_git(["add", "."])
+    run_git(["commit", "-m", "Initialize mod from devkit"])
+
+# 7. Self-Destruct
 try:
     os.remove(SCRIPT_FILE)
 except Exception:
