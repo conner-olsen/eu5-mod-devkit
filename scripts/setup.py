@@ -9,6 +9,7 @@ TARGET_BRANCH = "tools/devkit"
 SCRIPT_FILE = os.path.abspath(__file__)
 SCRIPT_DIR = os.path.dirname(SCRIPT_FILE)
 
+# Detect if running from root or inside scripts/
 if os.path.basename(SCRIPT_DIR) == "scripts":
     ROOT_DIR = os.path.dirname(SCRIPT_DIR)
 else:
@@ -58,11 +59,11 @@ if not existing_remotes or REMOTE_NAME not in existing_remotes:
     run_git(["remote", "add", REMOTE_NAME, DEVKIT_URL])
 
 run_git(["remote", "set-url", "--push", REMOTE_NAME, "no_push"])
-run_git(["fetch", REMOTE_NAME])
+run_git(["fetch", "--depth=1", REMOTE_NAME])
 
 # 4. Handle Content
 if is_new_repo:
-    run_git(["pull", REMOTE_NAME, "main"])
+    run_git(["pull", "--depth=1", REMOTE_NAME, "main"])
 else:
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR, onerror=on_rm_error)
