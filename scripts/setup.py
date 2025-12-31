@@ -85,12 +85,22 @@ if is_new_repo:
     run_git(["add", "."])
     run_git(["commit", "-m", "Initialize mod from devkit"])
 
-# 6. Setup Remote and Branch
-run_git(["remote", "add", REMOTE_NAME, DEVKIT_URL])
-run_git(["remote", "set-url", "--push", REMOTE_NAME, "no_push"])
-run_git(["fetch", REMOTE_NAME, f"main:{TARGET_BRANCH}"])
+# 6. Setup Remote
+# Add the remote if it doesn't exist
+existing_remotes = run_git(["remote"])
+if not existing_remotes or REMOTE_NAME not in existing_remotes:
+    run_git(["remote", "add", REMOTE_NAME, DEVKIT_URL])
 
-# 7. Self-Destruct
+# Disable pushing to the devkit remote
+run_git(["remote", "set-url", "--push", REMOTE_NAME, "no_push"])
+
+# Fetch the remote data (this creates remotes/devkit/main)
+run_git(["fetch", REMOTE_NAME])
+
+# 7. Setup Tracking Branch (tools/devkit)
+run_git(["branch", "--track", TARGET_BRANCH, f"{REMOTE_NAME}/main"])
+
+# 8. Self-Destruct
 try:
     os.remove(SCRIPT_FILE)
 except Exception:
