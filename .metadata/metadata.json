@@ -1,7 +1,7 @@
 ﻿{
   "name": "Mod Devkit Dev",
   "id": "devkit.dev",
-  "version": "0.2",
+  "version": "0.1",
   "game_id": "eu5",
   "supported_game_version": "1.0.*",
   "short_description": "A mod devkit including a template and tools for creating mods.",
