@@ -103,6 +103,15 @@ if not is_new_repo:
     run_git(["merge", TARGET_BRANCH, "--allow-unrelated-histories", "-s", "ours", "-m", "Link devkit history"])
 
 # 7. Self-Destruct
+# Delete the copy inside the scripts folder if it differs from the running file
+repo_script = os.path.join(ROOT_DIR, "scripts", "setup.py")
+if os.path.exists(repo_script) and os.path.abspath(repo_script) != SCRIPT_FILE:
+    try:
+        os.remove(repo_script)
+    except Exception:
+        pass
+
+# Delete the running script itself
 try:
     os.remove(SCRIPT_FILE)
 except Exception:
