@@ -22,12 +22,11 @@ if os.path.exists(dev_meta_path):
         meta_data = json.load(f)
 
     raw_name = meta_data["name"]
-    clean_name = raw_name.replace(" Dev", "")
+    clean_name = raw_name.removesuffix(" Dev")
 
     clean_name = clean_name.lower().replace(" ", "-")
     target_folder_name = f"{clean_name}-release"
 else:
-    # Forces a crash if file is missing, as requested
     raise FileNotFoundError(f"Metadata file not found at {dev_meta_path}")
 
 EXTERNAL_DEST = os.path.join(os.path.dirname(ROOT_DIR), target_folder_name)
@@ -68,8 +67,8 @@ if not os.path.exists(dest_meta_dir):
 with open(dev_meta_path, "r", encoding="utf-8-sig") as f:
     data = json.load(f)
 
-data["name"] = data["name"].replace(" Dev", "")
-data["id"] = data["id"].replace(".dev", "")
+data["name"] = data["name"].removesuffix(" Dev")
+data["id"] = data["id"].removesuffix(".dev")
 
 with open(dest_meta_path, "w", encoding="utf-8-sig") as f:
     json.dump(data, f, indent=4)
