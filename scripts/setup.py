@@ -3,6 +3,7 @@ import os, shutil, subprocess, stat, sys
 # --- Configuration ---
 DEVKIT_URL = "https://github.com/conner-olsen/eu5-mod-devkit.git"
 REMOTE_NAME = "devkit"
+TARGET_BRANCH = "tools/devkit"
 
 # --- Path Setup ---
 SCRIPT_FILE = os.path.abspath(__file__)
@@ -23,31 +24,39 @@ def on_rm_error(func, path, exc_info):
 
 def run_git(args, cwd=ROOT_DIR):
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["git"] + args,
             cwd=cwd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
             check=True
         )
-        return True
+        return result.stdout.strip()
     except subprocess.CalledProcessError:
-        return False
+        return None
 
 # --- Script ---
 
-# 1. Initialize Git if missing
-if not os.path.exists(os.path.join(ROOT_DIR, ".git")):
+# 1. Reset if this is a fresh clone of the Devkit itself
+git_dir = os.path.join(ROOT_DIR, ".git")
+
+if os.path.exists(git_dir):
+    current_url = run_git(["remote", "get-url", "origin"])
+    if current_url and "conner-olsen/eu5-mod-devkit" in current_url:
+        shutil.rmtree(git_dir, onerror=on_rm_error)
+# 2. Initialize Git if missing
+if not os.path.exists(git_dir):
     run_git(["init"])
     run_git(["branch", "-M", "main"])
 
-# 2. Clone Devkit to Temp Directory
+# 3. Clone Devkit to Temp Directory
 if os.path.exists(TEMP_DIR):
     shutil.rmtree(TEMP_DIR, onerror=on_rm_error)
 
 run_git(["clone", "--depth", "1", DEVKIT_URL, TEMP_DIR], cwd=ROOT_DIR)
 
-# 3. Copy Files (No Overwrite)
+# 4. Copy Files (No Overwrite)
 if os.path.exists(TEMP_DIR):
     for root, dirs, files in os.walk(TEMP_DIR):
         if ".git" in dirs:
@@ -63,17 +72,16 @@ if os.path.exists(TEMP_DIR):
             src_file = os.path.join(root, file)
             dest_file = os.path.join(dest_dir, file)
 
-            # Only copy if file does not exist
             if not os.path.exists(dest_file):
                 shutil.copy2(src_file, dest_file)
 
     shutil.rmtree(TEMP_DIR, onerror=on_rm_error)
 
-# 4. Add Remote
+# 5. Setup Remote and Branch
 run_git(["remote", "add", REMOTE_NAME, DEVKIT_URL])
-run_git(["fetch", REMOTE_NAME])
+run_git(["fetch", REMOTE_NAME, f"main:{TARGET_BRANCH}"])
 
-# 5. Self-Destruct
+# 6. Self-Destruct
 try:
     os.remove(SCRIPT_FILE)
 except Exception:
