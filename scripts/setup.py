@@ -62,12 +62,12 @@ run_git(["fetch", REMOTE_NAME])
 
 # 4. Handle Content
 if is_new_repo:
-    run_git(["pull", REMOTE_NAME, "main"])
+    run_git(["pull", REMOTE_NAME, "release"])
 else:
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR, onerror=on_rm_error)
 
-    run_git(["clone", "--depth", "1", DEVKIT_URL, TEMP_DIR], cwd=ROOT_DIR)
+    run_git(["clone", "--depth", "1", "--branch", "release", DEVKIT_URL, TEMP_DIR], cwd=ROOT_DIR)
 
     if os.path.exists(TEMP_DIR):
         for root, dirs, files in os.walk(TEMP_DIR):
@@ -90,7 +90,7 @@ else:
         shutil.rmtree(TEMP_DIR, onerror=on_rm_error)
 
 # 5. Setup Tracking Branch
-run_git(["branch", "--track", "--force", TARGET_BRANCH, f"{REMOTE_NAME}/main"])
+run_git(["branch", "--track", "--force", TARGET_BRANCH, f"{REMOTE_NAME}/release"])
 
 # 6. Link History
 if not is_new_repo:
