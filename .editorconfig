@@ -1,0 +1,11 @@
+root = true
+
+[prepare-release.sh]
+end_of_line = lf
+charset = utf-8
+
+[*.{txt,yml,gui}]
+charset = utf-8-bom
+
+[setup/start/**]
+charset = utf-8
