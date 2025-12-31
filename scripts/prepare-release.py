@@ -69,8 +69,11 @@ with open(dest_meta_path, "w", encoding="utf-8-sig") as f:
     json.dump(data, f, indent=4)
 
 # 4. Handle Thumbnail
-thumb_src = os.path.join(ROOT_DIR, ".metadata", "thumbnail-release.png")
+thumb_release = os.path.join(ROOT_DIR, ".metadata", "thumbnail-release.png")
+thumb_std = os.path.join(ROOT_DIR, ".metadata", "thumbnail.png")
 thumb_dest = os.path.join(dest_meta_dir, "thumbnail.png")
 
-if os.path.exists(thumb_src):
-    shutil.copy(thumb_src, thumb_dest)
+if os.path.exists(thumb_release):
+    shutil.copy(thumb_release, thumb_dest)
+elif os.path.exists(thumb_std):
+    shutil.copy(thumb_std, thumb_dest)
