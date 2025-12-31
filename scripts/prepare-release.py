@@ -7,12 +7,9 @@ SOURCES = [
     # "LICENSE", - example of adding a file to the release
 ]
 
-RELEASE_NAME = "release"
-
 # --- Path Setup ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)
-RELEASE_PATH = os.path.join(ROOT_DIR, RELEASE_NAME)
 
 # --- Generate Release Folder Name ---
 dev_meta_path = os.path.join(ROOT_DIR, ".metadata", "metadata.json")
@@ -29,7 +26,7 @@ if os.path.exists(dev_meta_path):
 else:
     raise FileNotFoundError(f"Metadata file not found at {dev_meta_path}")
 
-EXTERNAL_DEST = os.path.join(os.path.dirname(ROOT_DIR), target_folder_name)
+RELEASE_DIR = os.path.join(os.path.dirname(ROOT_DIR), target_folder_name)
 
 # --- Functions ---
 def on_rm_error(func, path, exc_info):
@@ -37,13 +34,17 @@ def on_rm_error(func, path, exc_info):
     func(path)
 
 # --- Script ---
-# 1. Sync Sources to Release Folder
-if not os.path.exists(RELEASE_PATH):
-    os.makedirs(RELEASE_PATH)
 
+# 1. Clean and Recreate Release Directory
+if os.path.exists(RELEASE_DIR):
+    shutil.rmtree(RELEASE_DIR, onerror=on_rm_error)
+
+os.makedirs(RELEASE_DIR)
+
+# 2. Copy Sources directly to Release Directory
 for item in SOURCES:
     src_path = os.path.join(ROOT_DIR, item)
-    dest_path = os.path.join(RELEASE_PATH, item)
+    dest_path = os.path.join(RELEASE_DIR, item)
 
     if os.path.exists(src_path):
         if os.path.isdir(src_path):
@@ -51,14 +52,8 @@ for item in SOURCES:
         else:
             shutil.copy(src_path, dest_path)
 
-# 2. Deploy to External Directory
-if os.path.exists(EXTERNAL_DEST):
-    shutil.rmtree(EXTERNAL_DEST, onerror=on_rm_error)
-
-shutil.copytree(RELEASE_PATH, EXTERNAL_DEST)
-
 # 3. Generate Release Metadata
-dest_meta_dir = os.path.join(EXTERNAL_DEST, ".metadata")
+dest_meta_dir = os.path.join(RELEASE_DIR, ".metadata")
 dest_meta_path = os.path.join(dest_meta_dir, "metadata.json")
 
 if not os.path.exists(dest_meta_dir):
@@ -73,13 +68,9 @@ data["id"] = data["id"].removesuffix(".dev")
 with open(dest_meta_path, "w", encoding="utf-8-sig") as f:
     json.dump(data, f, indent=4)
 
-# 4. Cleanup Release Folder
-for item in os.listdir(RELEASE_PATH):
-    if item == ".metadata":
-        continue
+# 4. Handle Thumbnail
+thumb_src = os.path.join(ROOT_DIR, ".metadata", "thumbnail-release.png")
+thumb_dest = os.path.join(dest_meta_dir, "thumbnail.png")
 
-    item_path = os.path.join(RELEASE_PATH, item)
-    if os.path.isdir(item_path):
-        shutil.rmtree(item_path, onerror=on_rm_error)
-    else:
-        os.remove(item_path)
+if os.path.exists(thumb_src):
+    shutil.copy(thumb_src, thumb_dest)
