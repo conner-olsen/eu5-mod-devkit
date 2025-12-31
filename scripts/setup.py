@@ -80,14 +80,15 @@ if os.path.exists(TEMP_DIR):
 
     shutil.rmtree(TEMP_DIR, onerror=on_rm_error)
 
-# 5. Setup Remote and Branch
-run_git(["remote", "add", REMOTE_NAME, DEVKIT_URL])
-run_git(["fetch", REMOTE_NAME, f"main:{TARGET_BRANCH}"])
-
-# 6. Create Initial Commit (Only for new repos)
+# 5. Create Initial Commit (Only for new repos)
 if is_new_repo:
     run_git(["add", "."])
     run_git(["commit", "-m", "Initialize mod from devkit"])
+
+# 6. Setup Remote and Branch
+run_git(["remote", "add", REMOTE_NAME, DEVKIT_URL])
+run_git(["remote", "set-url", "--push", REMOTE_NAME, "no_push"])
+run_git(["fetch", REMOTE_NAME, f"main:{TARGET_BRANCH}"])
 
 # 7. Self-Destruct
 try:
