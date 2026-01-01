@@ -16,6 +16,7 @@ git checkout main -- .
 
 # 4. Remove this script
 git rm -f create-devkit-release.sh
+git rm -f README.md
 
 # 5. Commit and Push
 git commit -m "$VERSION"
