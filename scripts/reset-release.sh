@@ -26,6 +26,7 @@ git checkout main -- .
 
 # 7. Remove dev-only files
 git rm -f README.md
+git rm -f LICENSE
 git rm -f scripts/create-devkit-release.sh
 git rm -f scripts/reset-release.sh
 
