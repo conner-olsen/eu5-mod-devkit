@@ -25,8 +25,8 @@ eu5-mod-devkit/
 │   ├── prepare-release.py       # Auto-manages separate release and development versions of your mod
 │   ├── create-devkit-release.sh # (Internal) Devkit release management
 │   └── reset-release.sh         # (Internal) Devkit release management
-├── .editorconfig               # Makes all text files use the EU5 expected utf-8-bom
-├── .editorconfig               # Makes all text files use crlf line endings (windows default, but gets rid of annoying warnings).
+├── .editorconfig               # Makes all text files use the EU5 expected utf-8-bom (gets rid of some EU5 warnings and crashes).
+├── .editorconfig               # Makes all text files use crlf line endings (gets rid of some Git warnings).
 ├── LICENSE                     # (Internal) Project license
 └── README.md                   # (Internal) This file
 ```
