@@ -1,10 +1,10 @@
 ﻿{
-  "name": "Mod Devkit Dev",
-  "id": "devkit.dev",
+  "name": "[Mod Name] Dev",
+  "id": "[modname].dev",
   "version": "0.1",
   "game_id": "eu5",
   "supported_game_version": "1.0.*",
-  "short_description": "A mod devkit including a template and tools for creating mods.",
+  "short_description": "[Short Description]",
   "tags": [
     "Government and Estates",
     "Trade and Economics",
