@@ -52,12 +52,12 @@ run_git(["fetch", REMOTE_NAME])
 
 # 3. Interactive Prompt
 print("\n--- Conflict Resolution Strategy ---")
-print("  [Y] Yes (Default): Overwrite local files with template versions.")
-print("      Changes will be STAGED for review in GitHub Desktop.")
+print("  [y] Yes (Default): Overwrite local files with template versions.")
+print("      Overwrites will be STAGED but NOT commited so you can review and revert any unwanted changes.")
 print("  [n] No: Keep your local files. Only adds new template files (no overwrites).")
 
 while True:
-    choice = input("\nOverwrite local files with template? [Y/n]: ").strip().lower()
+    choice = input("\nOverwrite local files with template? [y/n]: ").strip().lower()
     if choice in ["", "y", "yes"]:
         overwrite = True
         break
@@ -68,8 +68,6 @@ while True:
 # 4. Step 1: The Link (Safe Merge)
 print(f"\nLinking devkit history...")
 
-# We use --no-commit to pause here.
-# This puts the files in the "Staging Area", allowing us to remove setup.py BEFORE committing.
 run_git([
     "merge",
     "--no-commit",
@@ -80,8 +78,6 @@ run_git([
 ])
 
 # --- CLEANUP STEP 1: Remove the script from the merge commit ---
-# This deletes 'scripts/setup.py' from the Staging Area.
-# When we commit in the next step, this file will effectively "not exist" in the history.
 run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
 
 # Now we finalize the commit.
@@ -91,18 +87,15 @@ run_git(["commit", "-m", "Link devkit history"])
 if overwrite:
     print("Applying template files...")
 
-    # We forcefully checkout the release files from the remote.
-    # This brings 'scripts/setup.py' back into the Staging Area.
+    # Forcefully checkout the release files from the remote.
     run_git(["checkout", f"{REMOTE_NAME}/{REMOTE_BRANCH}", "--", "."])
 
     # --- CLEANUP STEP 2: Remove the script from the overwrite stage ---
-    # We remove it again so it doesn't appear in your "Uncommitted Changes" list.
+    # Remove it again so it doesn't appear as an uncommitted change.
     run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
 
-    print("\n--- ACTION REQUIRED ---")
-    print("1. History linked successfully.")
-    print("2. Template files have been staged for overwrite.")
-    print("3. Open GitHub Desktop to review the changes and commit.")
+    print("\n--- Devkit Linked Successfully ---")
+    print("If there were any conflicts, they will now appear as uncommited changes for review.")
 
 else:
     print("\nSuccess! Devkit linked (local files preserved).")
