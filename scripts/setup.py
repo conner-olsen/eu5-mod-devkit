@@ -7,6 +7,7 @@ REMOTE_BRANCH = "release"
 
 # --- Path Setup ---
 SCRIPT_FILE = os.path.abspath(__file__)
+SCRIPT_NAME = os.path.basename(SCRIPT_FILE)
 ROOT_DIR = os.getcwd()
 
 # --- Functions ---
