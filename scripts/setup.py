@@ -35,10 +35,17 @@ if not os.path.exists(os.path.join(ROOT_DIR, ".git")):
     print("Please initialize your repository (git init) first.")
     sys.exit(1)
 
+status = run_git(["status", "--porcelain"])
+if status:
+    print("Error: You have uncommitted changes in your repository.")
+    print("Please Commit or Stash your changes before running this script.")
+    print("This ensures your work isn't accidentally overwritten or mixed into the template.")
+    sys.exit(1)
+
 current_remotes = run_git(["remote"])
 if not current_remotes or "origin" not in current_remotes:
     print("Error: No 'origin' remote found.")
-    print("Please link your repository to GitHub using 'git remote add origin ...'")
+    print("Please link your repository to GitHub (or another remote) before running this script.")
     sys.exit(1)
 
 # 2. Setup Remote
