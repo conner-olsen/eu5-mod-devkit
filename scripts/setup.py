@@ -35,12 +35,21 @@ if not os.path.exists(os.path.join(ROOT_DIR, ".git")):
     print("Please initialize your repository (git init) first.")
     sys.exit(1)
 
-status = run_git(["status", "--porcelain"])
-if status:
-    print("Error: You have uncommitted changes in your repository.")
-    print("Please Commit or Stash your changes before running this script.")
-    print("This ensures your work isn't accidentally overwritten or mixed into the template.")
-    sys.exit(1)
+# Check for uncommitted changes (Ignoring this script itself)
+status_output = run_git(["status", "--porcelain"])
+if status_output:
+    # Filter out the running script from the status list
+    lines = status_output.splitlines()
+    real_changes = [line for line in lines if not line.strip().endswith(SCRIPT_NAME)]
+
+    if real_changes:
+        print("Error: You have uncommitted changes in your repository.")
+        print("Please Commit or Stash your changes before running this script.")
+        print("This ensures your work isn't accidentally overwritten or mixed into the template.")
+        print("\nUncommitted files:")
+        for line in real_changes:
+            print(line)
+        sys.exit(1)
 
 current_remotes = run_git(["remote"])
 if not current_remotes or "origin" not in current_remotes:
