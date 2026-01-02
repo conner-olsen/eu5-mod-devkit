@@ -25,8 +25,9 @@ eu5-mod-devkit/
 │   ├── prepare-release.py       # Auto-manages separate release and development versions of your mod
 │   ├── create-devkit-release.sh # (Internal) Devkit release management
 │   └── reset-release.sh         # (Internal) Devkit release management
-├── .editorconfig               # Makes all text files use the EU5 expected utf-8-bom (gets rid of some EU5 warnings and crashes).
-├── .editorconfig               # Makes all text files use crlf line endings (gets rid of some Git warnings).
+├── .editorconfig               # Standardizes editor settings for EU5
+├── .gitattributes              # Makes all text files use crlf line endings
+├── .gitignore                  # Standard gitignore
 ├── LICENSE                     # (Internal) Project license
 └── README.md                   # (Internal) This file
 ```
@@ -47,7 +48,7 @@ By having the devkit as a remote, you can easily update the devkit by merging fr
    ```
    *Note: The script will not overwrite any existing files and can be run on existing repositories safely.*
 
-After running, the setup script will delete itself and should not need to use it again.
+After running, the setup script will delete itself and should not need to be used again.
 
 ### Manual Setup
 Simply copy any files you want to use from the `release` branch into your mod folder.
