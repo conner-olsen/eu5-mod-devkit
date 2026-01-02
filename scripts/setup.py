@@ -53,8 +53,8 @@ run_git(["fetch", REMOTE_NAME])
 # 3. Interactive Prompt
 print("\n--- Conflict Resolution Strategy ---")
 print("  [Y] Yes (Default): Overwrite local files with template versions.")
-print("      Changes will be STAGED so you can review them in GitHub Desktop.")
-print("  [n] No: Keep your local files. Template files are only added if they don't exist.")
+print("      Changes will be STAGED for review in GitHub Desktop.")
+print("  [n] No: Keep your local files. Only adds new template files (no overwrites).")
 
 while True:
     choice = input("\nOverwrite local files with template? [Y/n]: ").strip().lower()
@@ -65,43 +65,47 @@ while True:
         overwrite = False
         break
 
-# 4. Merge
-strategy = "theirs" if overwrite else "ours"
-print(f"\nMerging devkit tools...")
+# 4. Step 1: The Link (Safe Merge)
+# We ALWAYS merge first with '-X ours'.
+# This creates the necessary Merge Commit to link the histories safely.
+# It brings in new files but refuses to overwrite your existing work.
+print(f"\nLinking devkit history...")
 
-# We allow the commit to happen first to clear the MERGING state
 run_git([
     "merge",
     "--allow-unrelated-histories",
     "-s", "recursive",
-    "-X", strategy,
-    "-m", "Initialize devkit",
+    "-X", "ours",
+    "-m", "Link devkit history",
     f"{REMOTE_NAME}/{REMOTE_BRANCH}"
 ])
 
-# 5. Cleanup Staged Files (Post-Merge)
-# If the setup script got committed, remove it now
-run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
-# Amend the commit to finalize the removal from history
-run_git(["commit", "--amend", "--no-edit"])
-
-# 6. Handle Review Mode (Soft Reset)
+# 5. Step 2: The Content (Overwrite)
 if overwrite:
-    # This undoes the commit but leaves files Staged (Green in VS Code / Checked in GitHub Desktop)
-    # This removes the "MERGING" state so GitHub Desktop behaves normally.
-    run_git(["reset", "--soft", "HEAD~1"])
+    print("Applying template files...")
+
+    # We forcefully checkout the release files from the remote.
+    # This updates your working directory to match the template exactly.
+    # These show up as "Staged Changes" in GitHub Desktop.
+    run_git(["checkout", f"{REMOTE_NAME}/{REMOTE_BRANCH}", "--", "."])
+
+    # Unstage the setup script so it doesn't get committed
+    run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
 
     print("\n--- ACTION REQUIRED ---")
-    print("Files have been merged and overwrites are pending.")
-    print("Changes are STAGED for review.")
-    print("1. Open GitHub Desktop.")
-    print("2. Review the files.")
-    print("3. Commit when you are ready.")
+    print("1. History linked successfully.")
+    print("2. Template files have been staged for overwrite.")
+    print("3. Open GitHub Desktop to review the changes and commit.")
 
 else:
-    print("\nSuccess! Devkit installed (local files preserved).")
+    # If they chose 'No', the previous merge step was enough.
+    # We just cleanup the script from the history.
+    run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
+    run_git(["commit", "--amend", "--no-edit"])
 
-# 7. Self-Destruct
+    print("\nSuccess! Devkit linked (local files preserved).")
+
+# 6. Self-Destruct
 try:
     os.remove(SCRIPT_FILE)
 except Exception:
