@@ -22,7 +22,6 @@ def run_git(args, cwd=ROOT_DIR, check=True):
         )
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        # If check is False, just return None on error
         if not check:
             return None
         print(f"Git Error: {' '.join(args)}\n{e.stderr}")
@@ -40,7 +39,6 @@ current_remotes = run_git(["remote"])
 if not current_remotes or "origin" not in current_remotes:
     print("Error: No 'origin' remote found.")
     print("Please link your repository to GitHub using 'git remote add origin ...'")
-    print("This ensures your mod keeps its own identity.")
     sys.exit(1)
 
 # 2. Setup Remote
@@ -52,31 +50,53 @@ else:
 run_git(["remote", "set-url", "--push", REMOTE_NAME, "no_push"])
 run_git(["fetch", REMOTE_NAME])
 
-# 3. Native Merge
-# Use -X to merge the files in, but keep all present files.
-# --no-commit pauses the merge to remove the setup script before finishing.
-print("Merging devkit tools...")
+# 3. Interactive Prompt
+print("\n--- Conflict Resolution Strategy ---")
+print("  [Y] Yes (Default): Overwrite local files with template versions.")
+print("      Changes will be STAGED (not committed) so you can review them.")
+print("  [n] No: Keep your local files. Template files are only added if they don't exist.")
+
+while True:
+    choice = input("\nOverwrite local files with template? [Y/n]: ").strip().lower()
+    if choice in ["", "y", "yes"]:
+        overwrite = True
+        break
+    elif choice in ["n", "no"]:
+        overwrite = False
+        break
+
+# 4. Merge
+strategy = "theirs" if overwrite else "ours"
+print(f"\nMerging devkit tools...")
+
 run_git([
     "merge",
     "--no-commit",
     "--allow-unrelated-histories",
     "-s", "recursive",
-    "-X", "ours",
+    "-X", strategy,
     f"{REMOTE_NAME}/{REMOTE_BRANCH}"
 ])
 
-# 4. Cleanup Staged Files
-# Remove scripts/setup.py from the staging area so it doesn't get committed to the repo.
+# 5. Cleanup Staged Files
+# Remove scripts/setup.py from staging so it isn't committed
 run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
 
-# 5. Finalize Commit
-run_git(["commit", "-m", "Initialize devkit"])
+# 6. Finalize
+if overwrite:
+    # Mode: Overwrite (Manual Commit)
+    print("\n--- ACTION REQUIRED ---")
+    print("Files have been merged. Devkit versions have overwritten local files.")
+    print("The changes are currently STAGED for your review.")
+    print("1. Check changes: 'git status' or 'git diff --cached'")
+    print("2. When ready:    'git commit -m \"Initialize devkit\"'")
+else:
+    # Mode: Keep Local (Auto Commit)
+    run_git(["commit", "-m", "Initialize devkit"])
+    print("\nSuccess! Devkit installed (local files preserved).")
 
-# 6. Self-Destruct
-# Delete the running script (root level)
+# 7. Self-Destruct
 try:
     os.remove(SCRIPT_FILE)
 except Exception:
     pass
-
-print("Success! Devkit installed.")
