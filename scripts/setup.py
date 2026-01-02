@@ -65,32 +65,40 @@ while True:
         overwrite = False
         break
 
-# 4. Step 1: The Link (Safe Merge)
-# We ALWAYS merge first with '-X ours'.
-# This creates the necessary Merge Commit to link the histories safely.
-# It brings in new files but refuses to overwrite your existing work.
+# 4. Step 1: The Link (Safe Merge with Cleanup)
 print(f"\nLinking devkit history...")
 
+# Use --no-commit so we can remove the script before finalizing the history link
 run_git([
     "merge",
+    "--no-commit",
     "--allow-unrelated-histories",
     "-s", "recursive",
     "-X", "ours",
-    "-m", "Link devkit history",
     f"{REMOTE_NAME}/{REMOTE_BRANCH}"
 ])
+
+# --- CRITICAL FIX: Unstage setup scripts BEFORE committing ---
+# This ensures 'scripts/setup.py' is NOT included in the merge commit.
+run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
+# Also unstage the running root script if it somehow got added
+run_git(["reset", "HEAD", "setup.py"], check=False)
+
+# Now we finalize the merge commit. The history is linked, but the script file is absent.
+run_git(["commit", "--no-edit", "-m", "Link devkit history"])
 
 # 5. Step 2: The Content (Overwrite)
 if overwrite:
     print("Applying template files...")
 
-    # We forcefully checkout the release files from the remote.
-    # This updates your working directory to match the template exactly.
-    # These show up as "Staged Changes" in GitHub Desktop.
+    # Force checkout files from remote to stage them
     run_git(["checkout", f"{REMOTE_NAME}/{REMOTE_BRANCH}", "--", "."])
 
-    # Unstage the setup script so it doesn't get committed
+    # Remove the script again so it doesn't appear in the "Staged Changes" list
     run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
+
+    # Also ensure the running root script is not staged
+    run_git(["reset", "HEAD", "setup.py"], check=False)
 
     print("\n--- ACTION REQUIRED ---")
     print("1. History linked successfully.")
@@ -98,14 +106,10 @@ if overwrite:
     print("3. Open GitHub Desktop to review the changes and commit.")
 
 else:
-    # If they chose 'No', the previous merge step was enough.
-    # We just cleanup the script from the history.
-    run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
-    run_git(["commit", "--amend", "--no-edit"])
-
     print("\nSuccess! Devkit linked (local files preserved).")
 
 # 6. Self-Destruct
+# Deletes the physical file on disk
 try:
     os.remove(SCRIPT_FILE)
 except Exception:
