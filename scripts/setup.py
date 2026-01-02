@@ -53,7 +53,7 @@ run_git(["fetch", REMOTE_NAME])
 # 3. Interactive Prompt
 print("\n--- Conflict Resolution Strategy ---")
 print("  [Y] Yes (Default): Overwrite local files with template versions.")
-print("      Changes will be STAGED (not committed) so you can review them.")
+print("      Changes will be STAGED so you can review them in GitHub Desktop.")
 print("  [n] No: Keep your local files. Template files are only added if they don't exist.")
 
 while True:
@@ -69,30 +69,36 @@ while True:
 strategy = "theirs" if overwrite else "ours"
 print(f"\nMerging devkit tools...")
 
+# We allow the commit to happen first to clear the MERGING state
 run_git([
     "merge",
-    "--no-commit",
     "--allow-unrelated-histories",
     "-s", "recursive",
     "-X", strategy,
+    "-m", "Initialize devkit",
     f"{REMOTE_NAME}/{REMOTE_BRANCH}"
 ])
 
-# 5. Cleanup Staged Files
-# Remove scripts/setup.py from staging so it isn't committed
+# 5. Cleanup Staged Files (Post-Merge)
+# If the setup script got committed, remove it now
 run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
+# Amend the commit to finalize the removal from history
+run_git(["commit", "--amend", "--no-edit"])
 
-# 6. Finalize
+# 6. Handle Review Mode (Soft Reset)
 if overwrite:
-    # Mode: Overwrite (Manual Commit)
+    # This undoes the commit but leaves files Staged (Green in VS Code / Checked in GitHub Desktop)
+    # This removes the "MERGING" state so GitHub Desktop behaves normally.
+    run_git(["reset", "--soft", "HEAD~1"])
+
     print("\n--- ACTION REQUIRED ---")
-    print("Files have been merged. Devkit versions have overwritten local files.")
-    print("The changes are currently STAGED for your review.")
-    print("1. Check changes: 'git status' or 'git diff --cached'")
-    print("2. When ready:    'git commit -m \"Initialize devkit\"'")
+    print("Files have been merged and overwrites are pending.")
+    print("Changes are STAGED for review.")
+    print("1. Open GitHub Desktop.")
+    print("2. Review the files.")
+    print("3. Commit when you are ready.")
+
 else:
-    # Mode: Keep Local (Auto Commit)
-    run_git(["commit", "-m", "Initialize devkit"])
     print("\nSuccess! Devkit installed (local files preserved).")
 
 # 7. Self-Destruct
