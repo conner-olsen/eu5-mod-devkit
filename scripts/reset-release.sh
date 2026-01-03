@@ -12,11 +12,11 @@ cd "$(dirname "$0")/.."
 git checkout main
 
 # 3. Delete release branch everywhere
-git branch -D release
-git push origin --delete release
+git branch -D devkit-release
+git push origin --delete devkit-release
 
 # 4. Create fresh Orphan branch
-git checkout --orphan release
+git checkout --orphan devkit-release
 
 # 5. Wipe directory
 git rm -rf .
@@ -32,7 +32,7 @@ git rm -f scripts/reset-release.sh
 
 # 8. Commit and Push
 git commit -m "$VERSION"
-git push origin release
+git push origin devkit-release
 
 # 9. Return to main
 git checkout main

@@ -3,7 +3,7 @@ import os, subprocess, sys
 # --- Configuration ---
 DEVKIT_URL = "https://github.com/conner-olsen/eu5-mod-devkit.git"
 REMOTE_NAME = "devkit"
-REMOTE_BRANCH = "release"
+REMOTE_BRANCH = "devkit-release"
 
 # --- Path Setup ---
 SCRIPT_FILE = os.path.abspath(__file__)

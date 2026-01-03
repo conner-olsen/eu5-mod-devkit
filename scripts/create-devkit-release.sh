@@ -9,7 +9,7 @@ VERSION="v0.2"
 cd "$(dirname "$0")/.."
 
 # 2. Switch to release
-git checkout release
+git checkout devkit-release
 
 # 3. Wipe current directory
 git rm -rf .
@@ -25,7 +25,7 @@ git rm -f scripts/reset-release.sh
 
 # 6. Commit and Push
 git commit -m "$VERSION"
-git push origin release
+git push origin devkit-release
 
 # 7. Return to main
 git checkout main

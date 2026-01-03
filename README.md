@@ -44,7 +44,7 @@ By having the devkit as a remote, you can easily update the devkit by merging fr
    * **New Mods**: Create, initialize, and push, a new empty Git repo in the Europa Universalis V/mod folder.
 2. a) From the root of your mod folder, run:
    ```bash
-   curl -sL https://raw.githubusercontent.com/conner-olsen/eu5-mod-devkit/release/scripts/setup.py -o setup.py && python setup.py
+   curl -sL https://raw.githubusercontent.com/conner-olsen/eu5-mod-devkit/devkit-release/scripts/setup.py -o setup.py && python setup.py
    ```
    *Note: The script will not overwrite any existing files and can be run on existing repositories safely.*
 
