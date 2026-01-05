@@ -22,6 +22,7 @@ git rm -f README.md
 git rm -f LICENSE
 git rm -f scripts/create-devkit-release.sh
 git rm -f scripts/reset-release.sh
+git mv -f README-TEMPLATE.md README.md
 
 # 6. Commit and Push
 git commit -m "$VERSION"

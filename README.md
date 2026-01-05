@@ -29,7 +29,8 @@ eu5-mod-devkit/
 ├── .gitattributes              # Makes all text files use crlf line endings
 ├── .gitignore                  # Standard gitignore
 ├── LICENSE                     # (Internal) Project license
-└── README.md                   # (Internal) This file
+├── README.md                   # (Internal) This file
+└── README-TEMPLATE.md          # GitHub repo readme template, will be copied to README.md in the released branch.
 ```
 * Files marked as `(internal)` are not included in the release version, and are just for the devkit's own use. You do not need to copy them, and they will not be included if you run the setup script.
 
