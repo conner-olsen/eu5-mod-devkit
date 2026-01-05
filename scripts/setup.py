@@ -94,8 +94,11 @@ run_git([
     f"{REMOTE_NAME}/{REMOTE_BRANCH}"
 ])
 
-# --- CLEANUP STEP 1: Remove the script from the merge commit ---
+# --- CLEANUP STEP 1: Remove temporary files from the merge commit ---
+# 1. Remove the setup script so it isn't committed
 run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
+# 2. Remove the dummy file so it isn't committed
+run_git(["rm", "-f", "--ignore-unmatch", "in_game/common/dummy.txt"], check=False)
 
 # Now we finalize the commit.
 run_git(["commit", "-m", "Link devkit history"])
@@ -107,9 +110,10 @@ if overwrite:
     # Forcefully checkout the release files from the remote.
     run_git(["checkout", f"{REMOTE_NAME}/{REMOTE_BRANCH}", "--", "."])
 
-    # --- CLEANUP STEP 2: Remove the script from the overwrite stage ---
-    # Remove it again so it doesn't appear as an uncommitted change.
+    # --- CLEANUP STEP 2: Remove temporary files from the overwrite stage ---
+    # Remove them again because 'checkout' brought them back from the remote
     run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
+    run_git(["rm", "-f", "--ignore-unmatch", "in_game/common/dummy.txt"], check=False)
 
     print("\n--- Devkit Linked Successfully ---")
     print("If there were any conflicts, they will now appear as uncommited changes for review.")
