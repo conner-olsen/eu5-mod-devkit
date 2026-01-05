@@ -18,13 +18,18 @@ eu5-mod-devkit/
 │   └── thumbnail-release.png    # Release thumbnail template
 ├── assets/                     # Source assets (images, etc.)
 │   └── images/                  # Images used in the mod
-│       ├── thumbnail-full.png     # Full size thumbnail template
-│       └── thumbnail-dev-full.png # Full size dev thumbnail template
+│       ├── thumbnail.psd          # Photoshop template for the thumbnail
+│       └── thumbnail-alt.psd      # Alternative Photoshop template for the thumbnail
 ├── scripts/                    # Automation scripts
 │   ├── setup.py                 # Initial project setup script
 │   ├── prepare-release.py       # Auto-manages separate release and development versions of your mod
 │   ├── create-devkit-release.sh # (Internal) Devkit release management
 │   └── reset-release.sh         # (Internal) Devkit release management
+├── in_game/common/dummy.txt    # stub file to create the folder
+├── main_menu/
+│   └── localization
+│       └── english
+│          └── tmp_l_english.yml    # localization template file
 ├── .editorconfig               # Standardizes editor settings for EU5
 ├── .gitattributes              # Makes all text files use crlf line endings
 ├── .gitignore                  # Standard gitignore
