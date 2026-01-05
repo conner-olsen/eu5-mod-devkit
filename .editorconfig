@@ -1,0 +1,4 @@
+root = true
+
+[*.{txt,yml,gui}]
+charset = utf-8-bom
