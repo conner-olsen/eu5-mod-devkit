@@ -1,4 +1,10 @@
 root = true
 
+[*]
+end_of_line = crlf
+
+[*.sh]
+end_of_line = lf
+
 [*.{txt,yml,gui}]
 charset = utf-8-bom
