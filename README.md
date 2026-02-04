@@ -149,20 +149,19 @@ Setup:
 3. (optional) Run `translate.py` with `translate_workshop = true` to generate:
    * `assets/workshop/translations/title_<language>.txt`
    * `assets/workshop/translations/description_<language>.txt`
-4. Make sure the Steamworks dependencies exist in `scripts/dependencies/`:
-   * `steam_api64.dll`
-   * `SteamworksPy64.dll`
-   * `steam_appid.txt` (must contain `3450310`)
-5. Ensure the manual Steamworks module is present at `scripts/steamworks/`.
-6. Set the upload settings in `scripts/config.toml`:
+4. Set the upload settings in `scripts/config.toml`:
    * `workshop_upload_item_id` The numeric ID at the end of your mod's Workshop URL.
 	 ![mod-id-location.png](assets/images/mod-id-location.png)
-   * `workshop_upload_dry_run` (true/false; when true it prints what would be uploaded)
+   * `workshop_upload_dry_run` (true/false; when true it prints what would be uploaded, but doesn't actually upload anything)
 
 To run:
 ```bash
 python scripts/upload-mod-pages.py
 ```
+
+## Credits
+
+`upload-mod-pages.py` uses [SteamworksPy](https://github.com/philippj/SteamworksPy) by Philipp J for Steam Workshop updates.
 
 ## License
 
