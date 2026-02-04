@@ -40,6 +40,7 @@ LANGUAGE_CONFIG = {
 }
 
 TARGET_LANGUAGES = {
+	"english": "EN",
 	"polish": "PL",
 	"russian": "RU",
 	"simp_chinese": "ZH",
@@ -106,8 +107,6 @@ def load_source_language(config_path):
 		return None
 
 	source_language = source_language.strip().lower()
-	if source_language.startswith("l_"):
-		source_language = source_language[2:]
 
 	if source_language not in LANGUAGE_CONFIG:
 		valid = ", ".join(sorted(LANGUAGE_CONFIG.keys()))
