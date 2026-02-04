@@ -58,6 +58,11 @@ By having the devkit as a remote, you can easily update the devkit by merging fr
 
 After running, the setup script will delete itself and should not need to be used again.
 
+Once the devkit files are in place, install the Python dependencies:
+```bash
+pip install -r scripts/requirements.txt
+```
+
 ### Manual Setup
 Simply copy any files you want to use from the `release` branch into your mod folder.
 Note that without the devkit remote, you will have to manually check and copy over updates to the devkit.
@@ -110,6 +115,11 @@ Setup:
 To run:
 ```bash
 python scripts/translate.py
+```
+
+Note: You need to install the dependencies in `scripts/requirements.txt` before running this script.
+```bash
+pip install -r scripts/requirements.txt
 ```
 
 ## License
