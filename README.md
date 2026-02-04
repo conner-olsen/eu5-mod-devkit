@@ -95,32 +95,47 @@ To use the script:
    * The `in_game/`, `main_menu/` and any other files specified in the `SOURCES` list of `scripts/prepare-release.py`.
 
 ### translate.py
-Auto-translates localization files using the DeepL API.
+Auto-translates localization files using the DeepL API, and can optionally translate Steam Workshop titles/descriptions using DeepL or Gemini-3-Flash.
 It reads from `main_menu/localization/<source_language>` and writes translated `.yml` files for every EU5 supported language.
 * It preserves EU5 localization tags like `[...], $...$, @...!, #...#!`.
 * It will automatically skip lines that consist purely of tags or formatting characters.
 * You can skip translation on specific lines by adding `# NO_TRANSLATE` to the end of any line you want skipped.
 * You can skip blocks by wrapping them in `# NO_TRANSLATE BELOW` and `# NO_TRANSLATE END` (with the latter being optional).
-* Translates from the configured source language to all other target languages.
-* Only translates keys that changed since the last run, updating those keys in-place without rewriting the rest of the file.
-* Tracks per-key hashes in `scripts/.translate_hashes.json` (delete this file to force a full re-translate).
 * You can lock a translated output line by adding `# LOCK` at the end; locked lines are never overwritten even if the source changes.
-* If you want to completely disable a output language, you can delete its entry in `TARGET_LANGUAGES` from `scripts/config.toml`.
 
 Setup:
 1. Copy `.env-template` to `.env`.
 2. Add your DeepL API key as `DEEPL_API_KEY=your_key_here`.
-3. Set `source_language` in `scripts/config.toml` (supported values: english, french, german, spanish, polish, russian, simp_chinese, turkish, braz_por, japanese, korean).
+3. If you plan to use Gemini for workshop translations, add `GEMINI_API_KEY=your_key_here` to `.env`.
+4. Review and change any settings you want in `scripts/config.toml`
+   * `source_language` (english, french, german, spanish, polish, russian, simp_chinese, turkish, braz_por, japanese, korean)
+   * `translate_workshop` (true/false)
+   * `workshop_description_translator` (deepl or gemini-3-flash)
+   * `gemini_system_prompt`
+   * `workshop_title_translator` (deepl or gemini-3-flash)
+   * `gemini_title_system_prompt`
+5. If using workshop translations:
+   * Put your workshop description in `assets/workshop/workshop-description.txt`.
+   * Your workshop title is pulled from `.metadata/metadata.json` (`name`), with a trailing ` Dev` removed if present.
+6. Install the dependencies using `pip install -r scripts/requirements.txt` (if you ran the setup script, this is already done)
 
 To run:
 ```bash
 python scripts/translate.py
 ```
 
-Note: You need to install the dependencies in `scripts/requirements.txt` before running this script.
-```bash
-pip install -r scripts/requirements.txt
-```
+Notes:
+  * Translated workshop titles/descriptions are written to `assets/workshop/translations/`.
+  * Workshop descriptions are re-translated only when `assets/workshop/workshop-description.txt` changes, or when the selected provider changes.
+  * Hashes are stored in `scripts/.translate_hashes.json` deleting this file will force re-translation of all lines.
+  * If you want to completely disable an output language, you can delete its entry in `TARGET_LANGUAGES` from `scripts/translate.py`.
+  * Localization keys that have not been changed since the last translation are skipped to avoid unnecessary API calls.
+  * Workshop descriptions are translated each time the description file changes.
+  * Workshop titles are generated once and never overwritten (you can delete the translated title files to force re-translation).
+  * DeepL's free tier allows 500k characters per month.
+  * Gemini's free tier allows 20 requests per day, which allows 2x workshop descriptions, or 1x title+description per day.
+  * There will be mistakes, and some translations may be incorrect, but it should be better than nothing.
+  * Gemini generally seems to perform better than DeepL for the workshop page translations but has lower limits.
 
 ## License
 

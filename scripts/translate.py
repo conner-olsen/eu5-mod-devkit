@@ -3,6 +3,10 @@ import re
 import sys
 import json
 import hashlib
+import time
+import urllib.request
+import urllib.parse
+import urllib.error
 import deepl
 from dotenv import load_dotenv
 try:
@@ -16,14 +20,26 @@ except ModuleNotFoundError:
 
 load_dotenv()
 AUTH_KEY = os.getenv("DEEPL_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = "gemini-3-flash-preview"
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 if not AUTH_KEY:
 	print("Error: DEEPL_API_KEY not found in .env file.")
 	print("Please create a .env file with DEEPL_API_KEY=your_key_here")
 	sys.exit(1)
 
-BASE_LOC_PATH = os.path.join(os.path.dirname(__file__), "../main_menu/localization")
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.toml")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(SCRIPT_DIR)
+
+BASE_LOC_PATH = os.path.join(ROOT_DIR, "main_menu", "localization")
+CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.toml")
+METADATA_PATH = os.path.join(ROOT_DIR, ".metadata", "metadata.json")
+WORKSHOP_DESCRIPTION_PATH = os.path.join(ROOT_DIR, "assets", "workshop", "workshop-description.txt")
+WORKSHOP_TRANSLATIONS_DIR = os.path.join(ROOT_DIR, "assets", "workshop", "translations")
+
+ALLOWED_WORKSHOP_DESCRIPTION_TRANSLATORS = {"deepl", "gemini-3-flash"}
+ALLOWED_WORKSHOP_TITLE_TRANSLATORS = {"deepl", "gemini-3-flash"}
 
 LANGUAGE_CONFIG = {
 	"english": {"deepl": "EN", "loc_id": "l_english"},
@@ -53,8 +69,22 @@ TARGET_LANGUAGES = {
 	"korean": "KO"
 }
 
+LANGUAGE_DISPLAY_NAMES = {
+	"english": "English",
+	"polish": "Polish",
+	"russian": "Russian",
+	"simp_chinese": "Simplified Chinese",
+	"spanish": "Spanish",
+	"turkish": "Turkish",
+	"braz_por": "Portuguese (Brazil)",
+	"french": "French",
+	"german": "German",
+	"japanese": "Japanese",
+	"korean": "Korean"
+}
+
 # Cache of source key/value hashes to avoid re-translating unchanged lines.
-HASHES_PATH = os.path.join(os.path.dirname(__file__), ".translate_hashes.json")
+HASHES_PATH = os.path.join(SCRIPT_DIR, ".translate_hashes.json")
 HASH_FILE_VERSION = 1
 
 KEY_VALUE_RE = re.compile(r'^(\s*)([^:#]+):\s*"(.*)"(.*)$')
@@ -65,58 +95,123 @@ LOCK_RE = re.compile(r'#\s*LOCK\b')
 # LOGIC
 # ==========================================
 
-def _parse_source_language_from_line(line):
-	key, sep, value = line.partition("=")
-	if not sep:
-		return None
-	if key.strip() != "source_language":
-		return None
-	value = value.split("#", 1)[0].strip()
+def _parse_simple_config_value(raw_value):
+	"""Parse a simple TOML-style value into bool or string."""
+	value = raw_value.split("#", 1)[0].strip()
 	if len(value) >= 2 and ((value[0] == value[-1]) and value[0] in ("'", '"')):
 		value = value[1:-1]
-	return value.strip()
+	lower = value.lower()
+	if lower in ("true", "false"):
+		return lower == "true"
+	return value
 
-def load_source_language(config_path):
+def _load_simple_config(config_path):
+	"""Load a minimal key = value config without full TOML support."""
+	data = {}
+	with open(config_path, "r", encoding="utf-8") as f:
+		for line in f:
+			stripped = line.strip()
+			if not stripped or stripped.startswith("#"):
+				continue
+			key, sep, value = stripped.partition("=")
+			if not sep:
+				continue
+			key = key.strip()
+			if not key:
+				continue
+			data[key] = _parse_simple_config_value(value)
+	return data
+
+def load_config(config_path):
+	"""Load config.toml and validate required keys and values."""
 	if not os.path.exists(config_path):
 		print(f"Error: Config file not found: {config_path}")
-		return None
-
-	source_language = None
+		return None, None, None, None, None, None
 
 	try:
 		if tomllib:
 			with open(config_path, "rb") as f:
 				data = tomllib.load(f)
-			source_language = data.get("source_language")
 		else:
-			with open(config_path, "r", encoding="utf-8") as f:
-				for line in f:
-					stripped = line.strip()
-					if not stripped or stripped.startswith("#"):
-						continue
-					value = _parse_source_language_from_line(stripped)
-					if value:
-						source_language = value
-						break
+			data = _load_simple_config(config_path)
 	except Exception as e:
 		print(f"Error reading config file: {e}")
-		return None
+		return None, None, None, None, None, None
 
+	source_language = data.get("source_language")
 	if not source_language:
 		print(f"Error: source_language not set in {config_path}")
-		return None
+		return None, None, None, None, None, None
 
-	source_language = source_language.strip().lower()
+	source_language = str(source_language).strip().lower()
 
 	if source_language not in LANGUAGE_CONFIG:
 		valid = ", ".join(sorted(LANGUAGE_CONFIG.keys()))
 		print(f"Error: Unsupported source_language '{source_language}'.")
 		print(f"Supported values: {valid}")
-		return None
+		return None, None, None, None, None, None
 
-	return source_language
+	if "translate_workshop" not in data:
+		print(f"Error: translate_workshop not set in {config_path}")
+		return None, None, None, None, None, None
+	translate_workshop = data.get("translate_workshop")
+	if not isinstance(translate_workshop, bool):
+		print("Error: translate_workshop must be a boolean (true/false).")
+		return None, None, None, None, None, None
+
+	if "workshop_description_translator" not in data:
+		print(f"Error: workshop_description_translator not set in {config_path}")
+		return None, None, None, None, None, None
+	workshop_description_translator = data.get("workshop_description_translator")
+	if not isinstance(workshop_description_translator, str):
+		print("Error: workshop_description_translator must be a string.")
+		return None, None, None, None, None, None
+	if workshop_description_translator not in ALLOWED_WORKSHOP_DESCRIPTION_TRANSLATORS:
+		valid = ", ".join(sorted(ALLOWED_WORKSHOP_DESCRIPTION_TRANSLATORS))
+		print(f"Error: Unsupported workshop_description_translator '{workshop_description_translator}'.")
+		print(f"Supported values: {valid}")
+		return None, None, None, None, None, None
+
+	if "workshop_title_translator" not in data:
+		print(f"Error: workshop_title_translator not set in {config_path}")
+		return None, None, None, None, None, None
+	workshop_title_translator = data.get("workshop_title_translator")
+	if not isinstance(workshop_title_translator, str):
+		print("Error: workshop_title_translator must be a string.")
+		return None, None, None, None, None, None
+	if workshop_title_translator not in ALLOWED_WORKSHOP_TITLE_TRANSLATORS:
+		valid = ", ".join(sorted(ALLOWED_WORKSHOP_TITLE_TRANSLATORS))
+		print(f"Error: Unsupported workshop_title_translator '{workshop_title_translator}'.")
+		print(f"Supported values: {valid}")
+		return None, None, None, None, None, None
+
+	if "gemini_system_prompt" not in data:
+		print(f"Error: gemini_system_prompt not set in {config_path}")
+		return None, None, None, None, None, None
+	gemini_system_prompt = data.get("gemini_system_prompt")
+	if not isinstance(gemini_system_prompt, str) or not gemini_system_prompt.strip():
+		print("Error: gemini_system_prompt must be a non-empty string.")
+		return None, None, None, None, None, None
+
+	if "gemini_title_system_prompt" not in data:
+		print(f"Error: gemini_title_system_prompt not set in {config_path}")
+		return None, None, None, None, None, None
+	gemini_title_system_prompt = data.get("gemini_title_system_prompt")
+	if not isinstance(gemini_title_system_prompt, str) or not gemini_title_system_prompt.strip():
+		print("Error: gemini_title_system_prompt must be a non-empty string.")
+		return None, None, None, None, None, None
+
+	return (
+		source_language,
+		translate_workshop,
+		workshop_description_translator,
+		gemini_system_prompt,
+		workshop_title_translator,
+		gemini_title_system_prompt
+	)
 
 def get_translator():
+	"""Create a DeepL Translator instance."""
 	try:
 		return deepl.Translator(AUTH_KEY)
 	except Exception as e:
@@ -309,6 +404,7 @@ def translate_value(translator, key, original_value, deepl_code, source_lang_dee
 		return original_value
 
 def build_line(indent, key, text, comment):
+	"""Format a localization key/value line with optional comment."""
 	return f'{indent}{key}: "{text}"{comment}\n'
 
 def is_locked_line(line):
@@ -477,10 +573,9 @@ def process_file(
 	os.makedirs(target_dir, exist_ok=True)
 	target_filepath = os.path.join(target_dir, new_filename)
 
-	print(f"Translating {filename} -> {target_folder_name}...")
-
 	# If the target doesn't exist yet, write a fully translated file.
 	if not os.path.exists(target_filepath):
+		print(f"Translating {filename} -> {target_folder_name}...")
 		new_lines = translate_source_lines(
 			translator,
 			source_lines,
@@ -495,6 +590,21 @@ def process_file(
 
 	with open(target_filepath, 'r', encoding='utf-8-sig') as f:
 		target_lines = f.readlines()
+
+	target_index = build_target_key_index(target_lines)
+	has_missing_keys = any(entry["key"] not in target_index for entry in source_entries)
+	header_needs_update = False
+	for line in target_lines:
+		if HEADER_RE.match(line.strip()):
+			header_needs_update = line.strip() != f"{new_lang_id}:"
+			break
+
+	# Skip work if nothing changed and the header matches.
+	if not changed_keys and not has_missing_keys and not header_needs_update:
+		print(f"No changes for {filename} -> {target_folder_name}; skipping.")
+		return
+
+	print(f"Translating {filename} -> {target_folder_name}...")
 
 	# Update only changed or missing keys; preserve everything else.
 	file_changed = ensure_target_header(target_lines, new_lang_id)
@@ -511,13 +621,324 @@ def process_file(
 	if file_changed:
 		with open(target_filepath, 'w', encoding='utf-8-sig') as f:
 			f.writelines(target_lines)
+	else:
+		print(f"No output changes for {filename} -> {target_folder_name}.")
+
+def _remove_dev_suffix(name):
+	"""Strip a trailing ' Dev' suffix from a mod name."""
+	if name.endswith(" Dev"):
+		return name[:-4].rstrip()
+	return name.strip()
+
+def load_workshop_title(metadata_path):
+	"""Load the workshop title from metadata.json and remove dev suffix."""
+	if not os.path.exists(metadata_path):
+		print(f"Warning: Metadata file not found: {metadata_path}")
+		return None
+	try:
+		with open(metadata_path, "r", encoding="utf-8-sig") as f:
+			data = json.load(f)
+	except Exception as e:
+		print(f"Warning: Failed to read metadata file '{metadata_path}': {e}")
+		return None
+
+	title = data.get("name")
+	if not title:
+		print(f"Warning: Metadata 'name' not found in {metadata_path}")
+		return None
+
+	return _remove_dev_suffix(str(title))
+
+def load_workshop_description(description_path):
+	"""Read the workshop description source text."""
+	if not os.path.exists(description_path):
+		print(f"Warning: Workshop description file not found: {description_path}")
+		return None
+	try:
+		with open(description_path, "r", encoding="utf-8-sig") as f:
+			return f.read()
+	except Exception as e:
+		print(f"Warning: Failed to read workshop description '{description_path}': {e}")
+		return None
+
+def translate_workshop_title(translator, title, deepl_code, source_lang_deepl):
+	"""Translate the workshop title using DeepL."""
+	try:
+		result = translator.translate_text(
+			title,
+			target_lang=deepl_code,
+			source_lang=source_lang_deepl
+		)
+		return cleanup_text(result.text)
+	except Exception as e:
+		print(f"  [Error] Failed to translate workshop title to {deepl_code}: {e}")
+		return None
+
+def translate_workshop_title_gemini(text, target_language, system_prompt):
+	"""Translate the workshop title using Gemini."""
+	if text == "":
+		return ""
+	masked_text, placeholders = mask_text_var(text)
+	prompt = _build_gemini_system_prompt(system_prompt, target_language)
+	payload = {
+		"systemInstruction": {"parts": [{"text": prompt}]},
+		"contents": [
+			{"role": "user", "parts": [{"text": masked_text}]}
+		]
+	}
+
+	response = _gemini_generate_content(payload)
+	if response is None:
+		return None
+
+	translated_text = _gemini_extract_text(response)
+	if translated_text is None:
+		print("  [Error] Gemini API returned no text.")
+		return None
+
+	is_valid, msg = validate_translation(translated_text, placeholders)
+	if not is_valid:
+		print(f"  [WARNING] Workshop title issue (Gemini): {msg}")
+
+	translated_text = unmask_text_var(translated_text, placeholders)
+	return cleanup_text(translated_text)
+
+def translate_workshop_description(translator, text, deepl_code, source_lang_deepl):
+	"""Translate the full workshop description using DeepL."""
+	if text == "":
+		return ""
+	masked_text, placeholders = mask_text_var(text)
+	try:
+		result = translator.translate_text(
+			masked_text,
+			target_lang=deepl_code,
+			source_lang=source_lang_deepl
+		)
+		is_valid, msg = validate_translation(result.text, placeholders)
+		if not is_valid:
+			print(f"  [WARNING] Workshop description issue ({deepl_code}): {msg}")
+		translated_text = unmask_text_var(result.text, placeholders)
+		if text.endswith("\n") and not translated_text.endswith("\n"):
+			translated_text += "\n"
+		return translated_text
+	except Exception as e:
+		print(f"  [Error] Failed to translate workshop description to {deepl_code}: {e}")
+		return None
+
+def _build_gemini_system_prompt(template, target_language):
+	"""Fill the {target_language} placeholder in the system prompt."""
+	try:
+		return template.format(target_language=target_language)
+	except Exception:
+		return template
+
+def _gemini_generate_content(payload):
+	"""Call the Gemini generateContent API with retries."""
+	if not GEMINI_API_KEY:
+		print("Error: GEMINI_API_KEY not found in .env file.")
+		print("Please create a .env file with GEMINI_API_KEY=your_key_here")
+		return None
+
+	url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent"
+	query = urllib.parse.urlencode({"key": GEMINI_API_KEY})
+	request_body = json.dumps(payload).encode("utf-8")
+
+	max_attempts = 3
+	base_delay = 2
+
+	# Retry transient failures with exponential backoff.
+	for attempt in range(1, max_attempts + 1):
+		request = urllib.request.Request(
+			f"{url}?{query}",
+			data=request_body,
+			headers={"Content-Type": "application/json"},
+			method="POST"
+		)
+
+		try:
+			with urllib.request.urlopen(request, timeout=60) as response:
+				raw = response.read().decode("utf-8")
+			return json.loads(raw)
+		except urllib.error.HTTPError as e:
+			body = e.read().decode("utf-8", errors="ignore")
+			retryable = e.code in (429, 500, 502, 503, 504)
+			if retryable and attempt < max_attempts:
+				delay = base_delay * (2 ** (attempt - 1))
+				print(f"  [Warning] Gemini API request failed ({e.code}) on attempt {attempt}/{max_attempts}. Retrying in {delay}s...")
+				time.sleep(delay)
+				continue
+			print(f"  [Error] Gemini API request failed ({e.code}): {body}")
+			return None
+		except urllib.error.URLError as e:
+			if attempt < max_attempts:
+				delay = base_delay * (2 ** (attempt - 1))
+				print(f"  [Warning] Gemini API request failed ({e.reason}) on attempt {attempt}/{max_attempts}. Retrying in {delay}s...")
+				time.sleep(delay)
+				continue
+			print(f"  [Error] Gemini API request failed: {e}")
+			return None
+		except Exception as e:
+			if attempt < max_attempts:
+				delay = base_delay * (2 ** (attempt - 1))
+				print(f"  [Warning] Gemini API request failed ({e}) on attempt {attempt}/{max_attempts}. Retrying in {delay}s...")
+				time.sleep(delay)
+				continue
+			print(f"  [Error] Gemini API request failed: {e}")
+			return None
+
+def _gemini_extract_text(response):
+	"""Extract concatenated text from a Gemini response payload."""
+	candidates = response.get("candidates") if isinstance(response, dict) else None
+	if not candidates:
+		return None
+	content = candidates[0].get("content", {})
+	parts = content.get("parts", []) if isinstance(content, dict) else []
+	text_chunks = []
+	for part in parts:
+		text = part.get("text")
+		if text:
+			text_chunks.append(text)
+	return "".join(text_chunks) if text_chunks else None
+
+def translate_workshop_description_gemini(text, target_language, system_prompt):
+	"""Translate the full workshop description using Gemini."""
+	if text == "":
+		return ""
+	masked_text, placeholders = mask_text_var(text)
+	prompt = _build_gemini_system_prompt(system_prompt, target_language)
+	payload = {
+		"systemInstruction": {"parts": [{"text": prompt}]},
+		"contents": [
+			{"role": "user", "parts": [{"text": masked_text}]}
+		]
+	}
+
+	response = _gemini_generate_content(payload)
+	if response is None:
+		return None
+
+	translated_text = _gemini_extract_text(response)
+	if translated_text is None:
+		print("  [Error] Gemini API returned no text.")
+		return None
+
+	is_valid, msg = validate_translation(translated_text, placeholders)
+	if not is_valid:
+		print(f"  [WARNING] Workshop description issue (Gemini): {msg}")
+
+	translated_text = unmask_text_var(translated_text, placeholders)
+	if text.endswith("\n") and not translated_text.endswith("\n"):
+		translated_text += "\n"
+	return translated_text
+
+def translate_workshop_assets(
+	translator,
+	source_language,
+	source_lang_deepl,
+	hash_data,
+	workshop_description_translator,
+	gemini_system_prompt,
+	workshop_title_translator,
+	gemini_title_system_prompt
+):
+	"""Translate workshop titles/descriptions and update cache metadata."""
+	title = load_workshop_title(METADATA_PATH)
+	description = load_workshop_description(WORKSHOP_DESCRIPTION_PATH)
+
+	if title is None and description is None:
+		return False
+
+	os.makedirs(WORKSHOP_TRANSLATIONS_DIR, exist_ok=True)
+
+	workshop_cache = hash_data.setdefault("workshop", {})
+	description_changed = False
+	translator_changed = workshop_cache.get("description_translator") != workshop_description_translator
+	description_hash = None
+	if description is not None:
+		description_hash = hash_text(description)
+		# Re-translate when source text or provider changes.
+		description_changed = workshop_cache.get("description_hash") != description_hash or translator_changed
+
+	description_success = True
+
+	for folder_name, deepl_code in TARGET_LANGUAGES.items():
+		if folder_name == source_language:
+			continue
+
+		if title:
+			title_path = os.path.join(WORKSHOP_TRANSLATIONS_DIR, f"title_{folder_name}.txt")
+			if not os.path.exists(title_path):
+				provider_label = "gemini-3-flash" if workshop_title_translator == "gemini-3-flash" else "deepl"
+				print(f"Translating workshop title -> {folder_name} ({provider_label})...")
+				if workshop_title_translator == "gemini-3-flash":
+					target_language = LANGUAGE_DISPLAY_NAMES.get(folder_name, folder_name)
+					translated_title = translate_workshop_title_gemini(
+						title,
+						target_language,
+						gemini_title_system_prompt
+					)
+				else:
+					translated_title = translate_workshop_title(
+						translator,
+						title,
+						deepl_code,
+						source_lang_deepl
+					)
+				if translated_title is not None:
+					with open(title_path, "w", encoding="utf-8") as f:
+						f.write(translated_title)
+			else:
+				print(f"Workshop title exists -> {folder_name}; skipping.")
+
+		if description is not None:
+			description_path = os.path.join(WORKSHOP_TRANSLATIONS_DIR, f"description_{folder_name}.txt")
+			needs_description = description_changed or not os.path.exists(description_path)
+			if needs_description:
+				provider_label = "gemini-3-flash" if workshop_description_translator == "gemini-3-flash" else "deepl"
+				print(f"Translating workshop description -> {folder_name} ({provider_label})...")
+				if workshop_description_translator == "gemini-3-flash":
+					target_language = LANGUAGE_DISPLAY_NAMES.get(folder_name, folder_name)
+					translated_description = translate_workshop_description_gemini(
+						description,
+						target_language,
+						gemini_system_prompt
+					)
+				else:
+					translated_description = translate_workshop_description(
+						translator,
+						description,
+						deepl_code,
+						source_lang_deepl
+					)
+				if translated_description is None:
+					description_success = False
+					continue
+				with open(description_path, "w", encoding="utf-8") as f:
+					f.write(translated_description)
+			else:
+				print(f"Workshop description unchanged -> {folder_name}; skipping.")
+
+	if description is not None and description_changed and description_success:
+		workshop_cache["description_hash"] = description_hash
+		workshop_cache["description_translator"] = workshop_description_translator
+		return True
+
+	return False
 
 def main():
+	"""Script entry point."""
 	translator = get_translator()
 	if not translator:
 		return
 
-	source_language = load_source_language(CONFIG_PATH)
+	(
+		source_language,
+		translate_workshop,
+		workshop_description_translator,
+		gemini_system_prompt,
+		workshop_title_translator,
+		gemini_title_system_prompt
+	) = load_config(CONFIG_PATH)
 	if not source_language:
 		return
 
@@ -583,6 +1004,19 @@ def main():
 		if rel_path not in processed_files:
 			del hash_data["files"][rel_path]
 			hashes_modified = True
+
+	# Optionally translate workshop title/description.
+	if translate_workshop:
+		hashes_modified = translate_workshop_assets(
+			translator,
+			source_language,
+			source_lang_deepl,
+			hash_data,
+			workshop_description_translator,
+			gemini_system_prompt,
+			workshop_title_translator,
+			gemini_title_system_prompt
+		) or hashes_modified
 
 	# Write cache only if something changed.
 	if hashes_modified:
