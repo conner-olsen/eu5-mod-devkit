@@ -96,12 +96,12 @@ To use the script:
 
 ### translate.py
 Auto-translates localization files using the DeepL API.
-It reads from `main_menu/localization/<source_language>` and writes translated `.yml` files for supported languages into `main_menu/localization/<language>/`.
+It reads from `main_menu/localization/<source_language>` and writes translated `.yml` files for every EU5 supported language.
 * It preserves EU5 localization tags like `[...], $...$, @...!, #...#!`.
 * It will automatically skip lines that consist purely of tags or formatting characters.
 * You can skip translation on specific lines by adding `# NO_TRANSLATE` to the end of any line you want skipped.
 * You can skip blocks by wrapping them in `# NO_TRANSLATE BELOW` and `# NO_TRANSLATE END` (with the latter being optional).
-* Translates from the configured source language to all other supported languages.
+* Translates from the configured source language to all other target languages.
 * Only translates keys that changed since the last run, updating those keys in-place without rewriting the rest of the file.
 * Tracks per-key hashes in `scripts/.translate_hashes.json` (delete this file to force a full re-translate).
 * You can lock a translated output line by adding `# LOCK` at the end; locked lines are never overwritten even if the source changes.
