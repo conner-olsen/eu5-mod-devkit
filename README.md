@@ -159,8 +159,6 @@ Setup:
 	 ![mod-id-location.png](assets/images/mod-id-location.png)
    * `workshop_upload_dry_run` (true/false; when true it prints what would be uploaded)
 
-The EU5 App ID is hardcoded to `3450310` in the script. The uploader temporarily moves the Steamworks DLLs and `steam_appid.txt` into the `scripts/` folder while it runs.
-
 To run:
 ```bash
 python scripts/upload-mod-pages.py

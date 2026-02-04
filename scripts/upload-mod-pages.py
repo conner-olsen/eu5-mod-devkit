@@ -211,21 +211,9 @@ def build_language_updates(source_language):
 
 	return updates
 
-def _get_ugc_api(steam):
-	for attr in ("UGC", "Workshop", "workshop"):
-		if hasattr(steam, attr):
-			return getattr(steam, attr)
-	return None
-
-def _ensure_ok(result, action, lang_label):
-	if result is False:
-		print(f"Error: {action} failed for {lang_label}.")
-		return False
-	return True
-
-def _set_item_update_language(ugc, steam, handle, language):
-	if hasattr(ugc, "SetItemUpdateLanguage"):
-		return ugc.SetItemUpdateLanguage(handle, language)
+def _set_item_update_language(workshop, steam, handle, language):
+	if hasattr(workshop, "SetItemUpdateLanguage"):
+		return workshop.SetItemUpdateLanguage(handle, language)
 	if hasattr(steam, "Workshop_SetItemUpdateLanguage"):
 		return steam.Workshop_SetItemUpdateLanguage(handle, language.encode())
 	return None
@@ -240,13 +228,8 @@ def main():
 	if not source_language:
 		return 1
 
-	moved_dependencies = _stage_steam_dependencies()
-	if moved_dependencies is None:
-		return 1
-
 	updates = build_language_updates(source_language)
 	if updates is None:
-		_restore_steam_dependencies(moved_dependencies)
 		return 1
 
 	print("Workshop language updates:")
@@ -257,8 +240,11 @@ def main():
 
 	if dry_run:
 		print("Dry run enabled; no upload performed.")
-		_restore_steam_dependencies(moved_dependencies)
 		return 0
+
+	moved_dependencies = _stage_steam_dependencies()
+	if moved_dependencies is None:
+		return 1
 
 	cwd_before = os.getcwd()
 	try:
@@ -277,43 +263,40 @@ def main():
 			print("Error: Steamworks initialization returned false.")
 			return 1
 
-		ugc = _get_ugc_api(steam)
-		if ugc is None:
-			print("Error: steamworks UGC API not available on this install.")
+		if not hasattr(steam, "Workshop"):
+			print("Error: steamworks Workshop API not available on this install.")
 			return 1
 
-		for method_name in ("StartItemUpdate", "SetItemTitle", "SetItemDescription", "SubmitItemUpdate"):
-			if not hasattr(ugc, method_name):
-				print(f"Error: steamworks UGC API missing method '{method_name}'.")
-				return 1
-		if not (hasattr(ugc, "SetItemUpdateLanguage") or hasattr(steam, "Workshop_SetItemUpdateLanguage")):
-			print("Error: steamworks UGC API missing method 'SetItemUpdateLanguage'.")
-			return 1
-
-		handle = ugc.StartItemUpdate(APP_ID, item_id)
+		workshop = steam.Workshop
+		handle = workshop.StartItemUpdate(APP_ID, item_id)
 		if not handle:
 			print("Error: StartItemUpdate failed. Check app ID and item ID.")
 			return 1
 
 		for update in updates:
 			lang_label = f"{update['lang']} ({update['steam_lang']})"
-			lang_result = _set_item_update_language(ugc, steam, handle, update["steam_lang"])
+			lang_result = _set_item_update_language(workshop, steam, handle, update["steam_lang"])
 			if lang_result is None:
 				print("Error: steamworks UGC API missing method 'SetItemUpdateLanguage'.")
 				return 1
-			if not _ensure_ok(lang_result, "SetItemUpdateLanguage", lang_label):
+			if lang_result is False:
+				print(f"Error: SetItemUpdateLanguage failed for {lang_label}.")
 				return 1
 
 			if update["title"] is not None:
-				if not _ensure_ok(ugc.SetItemTitle(handle, update["title"]), "SetItemTitle", lang_label):
+				title_result = workshop.SetItemTitle(handle, update["title"])
+				if title_result is False:
+					print(f"Error: SetItemTitle failed for {lang_label}.")
 					return 1
 
 			if update["description"] is not None:
-				if not _ensure_ok(ugc.SetItemDescription(handle, update["description"]), "SetItemDescription", lang_label):
+				desc_result = workshop.SetItemDescription(handle, update["description"])
+				if desc_result is False:
+					print(f"Error: SetItemDescription failed for {lang_label}.")
 					return 1
 
 		print("Submitting workshop update...")
-		submit_result = ugc.SubmitItemUpdate(handle, "")
+		submit_result = workshop.SubmitItemUpdate(handle, "")
 		if submit_result is False or submit_result == 0:
 			print("Error: SubmitItemUpdate failed.")
 			return 1
