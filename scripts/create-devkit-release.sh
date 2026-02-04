@@ -21,6 +21,7 @@ git checkout main -- .
 git rm -f README.md
 git rm -f scripts/create-devkit-release.sh
 git rm -f scripts/reset-release.sh
+git rm -f assets/images/mod-id-location.png
 git mv -f README-TEMPLATE.md README.md
 git mv -f .env-template .env
 

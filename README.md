@@ -24,6 +24,7 @@ eu5-mod-devkit/
 │   ├── setup.py                 # Initial project setup script
 │   ├── prepare-release.py       # Auto-manages separate release and development versions of your mod
 │   ├── translate.py             # Auto-translate localization files with DeepL
+│   ├── upload-mod-pages.py      # Upload Steam Workshop title/description per language
 │   ├── create-devkit-release.sh # (Internal) Devkit release management
 │   └── reset-release.sh         # (Internal) Devkit release management
 ├── in_game/common/dummy.txt    # stub file to create the folder
@@ -136,6 +137,25 @@ Notes:
   * Gemini's free tier allows 20 requests per day, which allows 2x workshop descriptions, or 1x title+description per day.
   * There will be mistakes, and some translations may be incorrect, but it should be better than nothing.
   * Gemini generally seems to perform better than DeepL for the workshop page translations but has lower limits.
+
+### upload-mod-pages.py
+Uploads Steam Workshop titles/descriptions for the native language and any translated workshop files.
+
+Setup:
+1. Make sure Steam is running and you are logged into the account that owns the workshop item.
+2. Ensure your workshop description exists at `assets/workshop/workshop-description.txt`.
+3. (optional) Run `translate.py` with `translate_workshop = true` to generate:
+   * `assets/workshop/translations/title_<language>.txt`
+   * `assets/workshop/translations/description_<language>.txt`
+4. Set the upload settings in `scripts/config.toml`:
+   * `workshop_upload_item_id` The numeric ID at the end of your mod's Workshop URL.
+	 ![mod-id-location.png](assets/images/mod-id-location.png)
+   * `workshop_upload_dry_run` (true/false; when true it prints what would be uploaded)
+
+To run:
+```bash
+python scripts/upload-mod-pages.py
+```
 
 ## License
 
