@@ -145,7 +145,7 @@ while True:
         overwrite = False
         break
 
-# 4. Step 1: The Link (Safe Merge)
+# 4. Link the repo's history (safe merge).
 print(f"\nLinking devkit history...")
 
 run_git([
@@ -163,10 +163,10 @@ run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
 # 2. Remove the dummy file so it isn't committed
 run_git(["rm", "-f", "--ignore-unmatch", "in_game/common/dummy.txt"], check=False)
 
-# Now we finalize the commit.
+# Finalize the commit.
 run_git(["commit", "-m", "Link devkit history"])
 
-# 5. Step 2: The Content (Overwrite)
+# 5. Overwrite local files but don't commit.
 if overwrite:
     print("Applying template files...")
 
