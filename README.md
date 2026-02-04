@@ -97,6 +97,8 @@ It reads from `main_menu/localization/<source_language>` and writes translated `
 * You can skip translation on specific lines by adding `# NO_TRANSLATE` to the end of any line you want skipped.
 * You can skip blocks by wrapping them in `# NO_TRANSLATE BELOW` and `# NO_TRANSLATE END` (with the latter being optional).
 * Translates from the configured source language to all other supported languages.
+* Only translates keys that changed since the last run, updating those keys in-place without rewriting the rest of the file.
+* Tracks per-key hashes in `scripts/.translate_hashes.json` (delete this file to force a full re-translate).
 
 Setup:
 1. Copy `.env-template` to `.env`.
