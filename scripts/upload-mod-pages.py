@@ -62,7 +62,6 @@ def load_config(config_path):
 		return None, None, None
 
 	upload_item_id = data.get("workshop_upload_item_id")
-	dry_run = data.get("workshop_upload_dry_run", False)
 
 	if upload_item_id is None:
 		print("Error: workshop_upload_item_id not set in config.toml.")
@@ -73,11 +72,7 @@ def load_config(config_path):
 	if item_id is None:
 		return None, None, None
 
-	if not isinstance(dry_run, bool):
-		print("Error: workshop_upload_dry_run must be a boolean (true/false).")
-		return None, None, None
-
-	return source_language, item_id, dry_run
+	return source_language, item_id
 
 def read_text(path):
 	"""Read a UTF-8 text file, returning None on missing/failed reads."""
@@ -178,8 +173,7 @@ def main():
 	"""Upload workshop titles/descriptions for all available languages."""
 	(
 		source_language,
-		item_id,
-		dry_run
+		item_id
 	) = load_config(CONFIG_PATH)
 
 	if not source_language:
@@ -196,10 +190,6 @@ def main():
 			f"{'title' if update['title'] is not None else 'no-title'}, "
 			f"{'description' if update['description'] is not None else 'no-description'}"
 		)
-
-	if dry_run:
-		print("Dry run enabled; no upload performed.")
-		return 0
 
 	cwd_before = os.getcwd()
 	try:

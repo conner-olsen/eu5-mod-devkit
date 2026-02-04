@@ -5,4 +5,3 @@ gemini_system_prompt = "You are a professional Steam mod page translator. Transl
 workshop_title_translator = "deepl" # Options: deepl, gemini-3-flash - highly recommended at least for title. But I would also recommend just using Gemini-3-Pro using the website (api has no free requests)
 gemini_title_system_prompt = "You are a professional Steam mod title translator. Translate the user's mod title into {target_language}. Preserve any bracketed tokens exactly. Do not add commentary; output only the translated text."
 workshop_upload_item_id = 3660067991 # Workshop PublishedFileId for this mod
-workshop_upload_dry_run = false # Set true to preview uploads without submitting

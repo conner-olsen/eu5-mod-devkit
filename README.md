@@ -152,7 +152,6 @@ Setup:
 4. Set the upload settings in `scripts/config.toml`:
    * `workshop_upload_item_id` The numeric ID at the end of your mod's Workshop URL.
 	 ![mod-id-location.png](assets/images/mod-id-location.png)
-   * `workshop_upload_dry_run` (true/false; when true it prints what would be uploaded, but doesn't actually upload anything)
 
 To run:
 ```bash
