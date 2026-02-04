@@ -21,6 +21,8 @@ eu5-mod-devkit/
 │       ├── thumbnail.psd          # Photoshop template for the thumbnail
 │       └── thumbnail-alt.psd      # Alternative Photoshop template for the thumbnail
 ├── scripts/                    # Automation scripts
+│   ├── dependencies/           # SteamworksPy DLLs, steam_appid.txt, and requirements.txt
+│   ├── steamworks/             # Manually downloaded steamworks python module
 │   ├── setup.py                 # Initial project setup script
 │   ├── prepare-release.py       # Auto-manages separate release and development versions of your mod
 │   ├── translate.py             # Auto-translate localization files with DeepL
@@ -61,7 +63,7 @@ After running, the setup script will delete itself and should not need to be use
 
 Once the devkit files are in place, install the Python dependencies:
 ```bash
-pip install -r scripts/requirements.txt
+pip install -r scripts/dependencies/requirements.txt
 ```
 
 ### Manual Setup
@@ -118,7 +120,7 @@ Setup:
 5. If using workshop translations:
    * Put your workshop description in `assets/workshop/workshop-description.txt`.
    * Your workshop title is pulled from `.metadata/metadata.json` (`name`), with a trailing ` Dev` removed if present.
-6. Install the dependencies using `pip install -r scripts/requirements.txt` (if you ran the setup script, this is already done)
+6. Install the dependencies using `pip install -r scripts/dependencies/requirements.txt` (if you ran the setup script, this is already done)
 
 To run:
 ```bash
@@ -147,10 +149,17 @@ Setup:
 3. (optional) Run `translate.py` with `translate_workshop = true` to generate:
    * `assets/workshop/translations/title_<language>.txt`
    * `assets/workshop/translations/description_<language>.txt`
-4. Set the upload settings in `scripts/config.toml`:
+4. Make sure the Steamworks dependencies exist in `scripts/dependencies/`:
+   * `steam_api64.dll`
+   * `SteamworksPy64.dll`
+   * `steam_appid.txt` (must contain `3450310`)
+5. Ensure the manual Steamworks module is present at `scripts/steamworks/`.
+6. Set the upload settings in `scripts/config.toml`:
    * `workshop_upload_item_id` The numeric ID at the end of your mod's Workshop URL.
 	 ![mod-id-location.png](assets/images/mod-id-location.png)
    * `workshop_upload_dry_run` (true/false; when true it prints what would be uploaded)
+
+The EU5 App ID is hardcoded to `3450310` in the script. The uploader temporarily moves the Steamworks DLLs and `steam_appid.txt` into the `scripts/` folder while it runs.
 
 To run:
 ```bash

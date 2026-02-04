@@ -191,12 +191,16 @@ merge_env_template(
 )
 
 # 7. Install Python dependencies
-requirements_path = os.path.join(ROOT_DIR, "scripts", "requirements.txt")
+requirements_path = os.path.join(ROOT_DIR, "scripts", "dependencies", "requirements.txt")
+legacy_requirements_path = os.path.join(ROOT_DIR, "scripts", "requirements.txt")
 if os.path.exists(requirements_path):
     print("\nInstalling Python dependencies...")
     run_pip(["install", "-r", requirements_path])
+elif os.path.exists(legacy_requirements_path):
+    print("\nInstalling Python dependencies...")
+    run_pip(["install", "-r", legacy_requirements_path])
 else:
-    print("Warning: scripts/requirements.txt not found. Skipping dependency install.")
+    print("Warning: requirements.txt not found. Skipping dependency install.")
 
 # 8. Self-Destruct
 try:

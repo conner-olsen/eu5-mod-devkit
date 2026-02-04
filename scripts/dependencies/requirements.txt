@@ -1,3 +1,2 @@
 deepl
 python-dotenv
-steamworks

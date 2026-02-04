@@ -1,10 +1,11 @@
 import json
 import os
 import re
+import shutil
 import sys
 
-import steamworks
 import tomllib
+from steamworks import STEAMWORKS
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)
@@ -14,6 +15,12 @@ METADATA_PATH = os.path.join(ROOT_DIR, ".metadata", "metadata.json")
 WORKSHOP_DESCRIPTION_PATH = os.path.join(ROOT_DIR, "assets", "workshop", "workshop-description.txt")
 TRANSLATIONS_DIR = os.path.join(ROOT_DIR, "assets", "workshop", "translations")
 APP_ID = 3450310
+DEPENDENCIES_DIR = os.path.join(SCRIPT_DIR, "dependencies")
+STEAM_DEPENDENCY_FILES = (
+	"steam_api64.dll",
+	"SteamworksPy64.dll",
+	"steam_appid.txt"
+)
 
 LANGUAGE_TO_STEAM = {
 	"english": "english",
@@ -112,6 +119,44 @@ def _parse_int(value, label):
 		return None
 	return parsed
 
+def _stage_steam_dependencies():
+	if not os.path.isdir(DEPENDENCIES_DIR):
+		print(f"Error: Dependencies folder not found: {DEPENDENCIES_DIR}")
+		return None
+
+	moved = []
+	missing = []
+	for filename in STEAM_DEPENDENCY_FILES:
+		source_path = os.path.join(DEPENDENCIES_DIR, filename)
+		target_path = os.path.join(SCRIPT_DIR, filename)
+
+		if os.path.exists(target_path):
+			continue
+		if not os.path.exists(source_path):
+			missing.append(filename)
+			continue
+
+		shutil.move(source_path, target_path)
+		moved.append(filename)
+
+	if missing:
+		print("Error: Missing Steamworks dependencies:")
+		for filename in missing:
+			print(f"  - {filename}")
+		_restore_steam_dependencies(moved)
+		return None
+
+	return moved
+
+def _restore_steam_dependencies(moved):
+	if not moved:
+		return
+	for filename in reversed(moved):
+		source_path = os.path.join(SCRIPT_DIR, filename)
+		target_path = os.path.join(DEPENDENCIES_DIR, filename)
+		if os.path.exists(source_path):
+			shutil.move(source_path, target_path)
+
 def build_language_updates(source_language):
 	base_description = read_text(WORKSHOP_DESCRIPTION_PATH)
 	if base_description is None:
@@ -178,6 +223,13 @@ def _ensure_ok(result, action, lang_label):
 		return False
 	return True
 
+def _set_item_update_language(ugc, steam, handle, language):
+	if hasattr(ugc, "SetItemUpdateLanguage"):
+		return ugc.SetItemUpdateLanguage(handle, language)
+	if hasattr(steam, "Workshop_SetItemUpdateLanguage"):
+		return steam.Workshop_SetItemUpdateLanguage(handle, language.encode())
+	return None
+
 def main():
 	(
 		source_language,
@@ -188,8 +240,13 @@ def main():
 	if not source_language:
 		return 1
 
+	moved_dependencies = _stage_steam_dependencies()
+	if moved_dependencies is None:
+		return 1
+
 	updates = build_language_updates(source_language)
 	if updates is None:
+		_restore_steam_dependencies(moved_dependencies)
 		return 1
 
 	print("Workshop language updates:")
@@ -200,19 +257,14 @@ def main():
 
 	if dry_run:
 		print("Dry run enabled; no upload performed.")
+		_restore_steam_dependencies(moved_dependencies)
 		return 0
 
-	steam = None
-	if hasattr(steamworks, "STEAMWORKS"):
-		steam = steamworks.STEAMWORKS()
-	elif hasattr(steamworks, "SteamWorks"):
-		steam = steamworks.SteamWorks()
-
-	if steam is None:
-		print("Error: steamworks module found, but no STEAMWORKS/SteamWorks class.")
-		return 1
-
+	cwd_before = os.getcwd()
 	try:
+		os.chdir(SCRIPT_DIR)
+		steam = STEAMWORKS()
+
 		if hasattr(steam, "initialize"):
 			init_result = steam.initialize()
 		elif hasattr(steam, "init"):
@@ -220,51 +272,57 @@ def main():
 		else:
 			print("Error: Steamworks instance has no initialize/init method.")
 			return 1
-	except Exception as e:
-		print(f"Error: Steamworks initialization failed: {e}")
-		print("Ensure Steam is running and steam_appid.txt is set for your app ID.")
-		return 1
 
-	if init_result is False:
-		print("Error: Steamworks initialization returned false.")
-		return 1
-
-	ugc = _get_ugc_api(steam)
-	if ugc is None:
-		print("Error: steamworks UGC API not available on this install.")
-		return 1
-
-	for method_name in ("StartItemUpdate", "SetItemUpdateLanguage", "SetItemTitle", "SetItemDescription", "SubmitItemUpdate"):
-		if not hasattr(ugc, method_name):
-			print(f"Error: steamworks UGC API missing method '{method_name}'.")
+		if init_result is False:
+			print("Error: Steamworks initialization returned false.")
 			return 1
 
-	handle = ugc.StartItemUpdate(APP_ID, item_id)
-	if not handle:
-		print("Error: StartItemUpdate failed. Check app ID and item ID.")
-		return 1
-
-	for update in updates:
-		lang_label = f"{update['lang']} ({update['steam_lang']})"
-		if not _ensure_ok(ugc.SetItemUpdateLanguage(handle, update["steam_lang"]), "SetItemUpdateLanguage", lang_label):
+		ugc = _get_ugc_api(steam)
+		if ugc is None:
+			print("Error: steamworks UGC API not available on this install.")
 			return 1
 
-		if update["title"] is not None:
-			if not _ensure_ok(ugc.SetItemTitle(handle, update["title"]), "SetItemTitle", lang_label):
+		for method_name in ("StartItemUpdate", "SetItemTitle", "SetItemDescription", "SubmitItemUpdate"):
+			if not hasattr(ugc, method_name):
+				print(f"Error: steamworks UGC API missing method '{method_name}'.")
+				return 1
+		if not (hasattr(ugc, "SetItemUpdateLanguage") or hasattr(steam, "Workshop_SetItemUpdateLanguage")):
+			print("Error: steamworks UGC API missing method 'SetItemUpdateLanguage'.")
+			return 1
+
+		handle = ugc.StartItemUpdate(APP_ID, item_id)
+		if not handle:
+			print("Error: StartItemUpdate failed. Check app ID and item ID.")
+			return 1
+
+		for update in updates:
+			lang_label = f"{update['lang']} ({update['steam_lang']})"
+			lang_result = _set_item_update_language(ugc, steam, handle, update["steam_lang"])
+			if lang_result is None:
+				print("Error: steamworks UGC API missing method 'SetItemUpdateLanguage'.")
+				return 1
+			if not _ensure_ok(lang_result, "SetItemUpdateLanguage", lang_label):
 				return 1
 
-		if update["description"] is not None:
-			if not _ensure_ok(ugc.SetItemDescription(handle, update["description"]), "SetItemDescription", lang_label):
-				return 1
+			if update["title"] is not None:
+				if not _ensure_ok(ugc.SetItemTitle(handle, update["title"]), "SetItemTitle", lang_label):
+					return 1
 
-	print("Submitting workshop update...")
-	submit_result = ugc.SubmitItemUpdate(handle, "")
-	if submit_result is False or submit_result == 0:
-		print("Error: SubmitItemUpdate failed.")
-		return 1
+			if update["description"] is not None:
+				if not _ensure_ok(ugc.SetItemDescription(handle, update["description"]), "SetItemDescription", lang_label):
+					return 1
 
-	print("Workshop update submitted. Check Steam client for upload progress.")
-	return 0
+		print("Submitting workshop update...")
+		submit_result = ugc.SubmitItemUpdate(handle, "")
+		if submit_result is False or submit_result == 0:
+			print("Error: SubmitItemUpdate failed.")
+			return 1
+
+		print("Workshop update submitted. Check Steam client for upload progress.")
+		return 0
+	finally:
+		os.chdir(cwd_before)
+		_restore_steam_dependencies(moved_dependencies)
 
 if __name__ == "__main__":
 	sys.exit(main())
