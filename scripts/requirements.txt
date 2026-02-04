@@ -1,0 +1,2 @@
+﻿deepl
+python-dotenv
