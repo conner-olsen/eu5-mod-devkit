@@ -4,6 +4,7 @@ import shutil, os, stat, json
 SOURCES = [
     "in_game",
     "main_menu",
+	"loading_screen"
     # "LICENSE", - example of adding a file to the release
 ]
 
