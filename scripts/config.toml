@@ -4,6 +4,5 @@ workshop_description_translator = "gemini-3-flash" # Options: deepl, gemini-3-fl
 gemini_system_prompt = "You are a professional Steam mod page translator. Translate the user's mod description into {target_language}. Preserve all BBCode tags, list markers, URLs, and bracketed tokens exactly. Do not add commentary; output only the translated text."
 workshop_title_translator = "deepl" # Options: deepl, gemini-3-flash - highly recommended at least for title. But I would also recommend just using Gemini-3-Pro using the website (api has no free requests)
 gemini_title_system_prompt = "You are a professional Steam mod title translator. Translate the user's mod title into {target_language}. Preserve any bracketed tokens exactly. Do not add commentary; output only the translated text."
-workshop_upload_app_id = 0 # Steam App ID for Steamworks uploads (set to your game's App ID)
 workshop_upload_item_id = 0 # Workshop PublishedFileId for this mod
 workshop_upload_dry_run = false # Set true to preview uploads without submitting

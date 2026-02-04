@@ -13,6 +13,7 @@ CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.toml")
 METADATA_PATH = os.path.join(ROOT_DIR, ".metadata", "metadata.json")
 WORKSHOP_DESCRIPTION_PATH = os.path.join(ROOT_DIR, "assets", "workshop", "workshop-description.txt")
 TRANSLATIONS_DIR = os.path.join(ROOT_DIR, "assets", "workshop", "translations")
+APP_ID = 3450310
 
 LANGUAGE_TO_STEAM = {
 	"english": "english",
@@ -31,52 +32,43 @@ LANGUAGE_TO_STEAM = {
 def load_config(config_path):
 	if not os.path.exists(config_path):
 		print(f"Error: Config file not found: {config_path}")
-		return None, None, None, None
+		return None, None, None
 
 	try:
 		with open(config_path, "rb") as f:
 			data = tomllib.load(f)
 	except Exception as e:
 		print(f"Error reading config file: {e}")
-		return None, None, None, None
+		return None, None, None
 
 	source_language = data.get("source_language")
 	if not source_language:
 		print(f"Error: source_language not set in {config_path}")
-		return None, None, None, None
+		return None, None, None
 
 	source_language = str(source_language).strip().lower()
 	if source_language not in LANGUAGE_TO_STEAM:
 		valid = ", ".join(sorted(LANGUAGE_TO_STEAM.keys()))
 		print(f"Error: Unsupported source_language '{source_language}'.")
 		print(f"Supported values: {valid}")
-		return None, None, None, None
+		return None, None, None
 
-	upload_app_id = data.get("workshop_upload_app_id")
 	upload_item_id = data.get("workshop_upload_item_id")
 	dry_run = data.get("workshop_upload_dry_run", False)
 
-	if upload_app_id is None:
-		print("Error: workshop_upload_app_id not set in config.toml.")
-		return None, None, None, None
-
 	if upload_item_id is None:
 		print("Error: workshop_upload_item_id not set in config.toml.")
-		return None, None, None, None
-
-	app_id = _parse_int(upload_app_id, "app id")
-	if app_id is None:
-		return None, None, None, None
+		return None, None, None
 
 	item_id = _parse_int(upload_item_id, "item id")
 	if item_id is None:
-		return None, None, None, None
+		return None, None, None
 
 	if not isinstance(dry_run, bool):
 		print("Error: workshop_upload_dry_run must be a boolean (true/false).")
-		return None, None, None, None
+		return None, None, None
 
-	return source_language, app_id, item_id, dry_run
+	return source_language, item_id, dry_run
 
 def read_text(path):
 	try:
@@ -189,7 +181,6 @@ def _ensure_ok(result, action, lang_label):
 def main():
 	(
 		source_language,
-		app_id,
 		item_id,
 		dry_run
 	) = load_config(CONFIG_PATH)
@@ -248,7 +239,7 @@ def main():
 			print(f"Error: steamworks UGC API missing method '{method_name}'.")
 			return 1
 
-	handle = ugc.StartItemUpdate(app_id, item_id)
+	handle = ugc.StartItemUpdate(APP_ID, item_id)
 	if not handle:
 		print("Error: StartItemUpdate failed. Check app ID and item ID.")
 		return 1
