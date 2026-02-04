@@ -1,4 +1,4 @@
-import os, subprocess, sys
+import os, subprocess, sys, shutil
 
 # --- Configuration ---
 DEVKIT_URL = "https://github.com/conner-olsen/eu5-mod-devkit.git"
@@ -27,6 +27,69 @@ def run_git(args, cwd=ROOT_DIR, check=True):
             return None
         print(f"Git Error: {' '.join(args)}\n{e.stderr}")
         sys.exit(1)
+
+def run_pip(args, cwd=ROOT_DIR, check=True):
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip"] + args,
+            cwd=cwd
+        )
+        if check and result.returncode != 0:
+            print("Error: pip command failed.")
+            sys.exit(1)
+        return result.returncode
+    except Exception as e:
+        if not check:
+            return None
+        print(f"Pip Error: {e}")
+        sys.exit(1)
+
+def _env_key_from_line(line):
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return None
+    if stripped.startswith("export "):
+        stripped = stripped[7:].lstrip()
+    if "=" not in stripped:
+        return None
+    key = stripped.split("=", 1)[0].strip()
+    return key or None
+
+def merge_env_template(template_path, env_path):
+    if not os.path.exists(template_path):
+        print("Warning: .env-template not found. Skipping .env setup.")
+        return
+
+    if not os.path.exists(env_path):
+        shutil.copyfile(template_path, env_path)
+        print("Created .env from .env-template.")
+        return
+
+    with open(env_path, "r", encoding="utf-8") as env_file:
+        env_lines = env_file.read().splitlines()
+    existing_keys = {
+        key for key in (_env_key_from_line(line) for line in env_lines) if key
+    }
+
+    with open(template_path, "r", encoding="utf-8") as template_file:
+        template_lines = template_file.read().splitlines()
+
+    lines_to_add = []
+    for line in template_lines:
+        key = _env_key_from_line(line)
+        if key and key not in existing_keys:
+            lines_to_add.append(line)
+
+    if not lines_to_add:
+        print(".env already has all entries from .env-template. No changes needed.")
+        return
+
+    with open(env_path, "a", encoding="utf-8") as env_file:
+        if env_lines and env_lines[-1] != "":
+            env_file.write("\n")
+        env_file.write("\n".join(lines_to_add))
+        env_file.write("\n")
+    print(f"Updated .env with {len(lines_to_add)} entr{'y' if len(lines_to_add) == 1 else 'ies'} from .env-template.")
 
 # --- Script ---
 
@@ -121,7 +184,21 @@ if overwrite:
 else:
     print("\nSuccess! Devkit linked (local files preserved).")
 
-# 6. Self-Destruct
+# 6. Merge .env-template into .env
+merge_env_template(
+    os.path.join(ROOT_DIR, ".env-template"),
+    os.path.join(ROOT_DIR, ".env")
+)
+
+# 7. Install Python dependencies
+requirements_path = os.path.join(ROOT_DIR, "scripts", "requirements.txt")
+if os.path.exists(requirements_path):
+    print("\nInstalling Python dependencies...")
+    run_pip(["install", "-r", requirements_path])
+else:
+    print("Warning: scripts/requirements.txt not found. Skipping dependency install.")
+
+# 8. Self-Destruct
 try:
     os.remove(SCRIPT_FILE)
 except Exception:
