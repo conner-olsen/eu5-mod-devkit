@@ -91,16 +91,17 @@ To use the script:
 
 ### translate.py
 Auto-translates localization files using the DeepL API.
-It reads from `main_menu/localization/english` and writes translated `.yml` files for supported languages into `main_menu/localization/<language>/`.
+It reads from `main_menu/localization/<source_language>` and writes translated `.yml` files for supported languages into `main_menu/localization/<language>/`.
 * It preserves EU5 localization tags like `[...], $...$, @...!, #...#!`.
 * It will automatically skip lines that consist purely of tags or formatting characters.
 * You can skip translation on specific lines by adding `# NO_TRANSLATE` to the end of any line you want skipped.
 * You can skip blocks by wrapping them in `# NO_TRANSLATE BELOW` and `# NO_TRANSLATE END` (with the latter being optional).
-* Translates from English to all EU5 supported languages.
+* Translates from the configured source language to all other supported languages.
 
 Setup:
 1. Copy `.env-template` to `.env`.
 2. Add your DeepL API key as `DEEPL_API_KEY=your_key_here`.
+3. Set `source_language` in `scripts/config.toml` (supported values: english, french, german, spanish, polish, russian, simp_chinese, turkish, braz_por, japanese, korean).
 
 To run:
 ```bash

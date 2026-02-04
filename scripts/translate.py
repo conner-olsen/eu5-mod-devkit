@@ -3,6 +3,10 @@ import re
 import sys
 import deepl
 from dotenv import load_dotenv
+try:
+	import tomllib
+except ModuleNotFoundError:
+	tomllib = None
 
 # ==========================================
 # CONFIGURATION
@@ -17,8 +21,21 @@ if not AUTH_KEY:
 	sys.exit(1)
 
 BASE_LOC_PATH = os.path.join(os.path.dirname(__file__), "../main_menu/localization")
-SOURCE_LANG_FOLDER = "english"
-SOURCE_LANG_ID = "l_english"
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.toml")
+
+LANGUAGE_CONFIG = {
+	"english": {"deepl": "EN", "loc_id": "l_english"},
+	"french": {"deepl": "FR", "loc_id": "l_french"},
+	"german": {"deepl": "DE", "loc_id": "l_german"},
+	"spanish": {"deepl": "ES", "loc_id": "l_spanish"},
+	"polish": {"deepl": "PL", "loc_id": "l_polish"},
+	"russian": {"deepl": "RU", "loc_id": "l_russian"},
+	"simp_chinese": {"deepl": "ZH", "loc_id": "l_simp_chinese"},
+	"turkish": {"deepl": "TR", "loc_id": "l_turkish"},
+	"braz_por": {"deepl": "PT", "loc_id": "l_braz_por"},
+	"japanese": {"deepl": "JA", "loc_id": "l_japanese"},
+	"korean": {"deepl": "KO", "loc_id": "l_korean"}
+}
 
 TARGET_LANGUAGES = {
 	"polish": "PL",
@@ -36,6 +53,59 @@ TARGET_LANGUAGES = {
 # ==========================================
 # LOGIC
 # ==========================================
+
+def _parse_source_language_from_line(line):
+	key, sep, value = line.partition("=")
+	if not sep:
+		return None
+	if key.strip() != "source_language":
+		return None
+	value = value.split("#", 1)[0].strip()
+	if len(value) >= 2 and ((value[0] == value[-1]) and value[0] in ("'", '"')):
+		value = value[1:-1]
+	return value.strip()
+
+def load_source_language(config_path):
+	if not os.path.exists(config_path):
+		print(f"Error: Config file not found: {config_path}")
+		return None
+
+	source_language = None
+
+	try:
+		if tomllib:
+			with open(config_path, "rb") as f:
+				data = tomllib.load(f)
+			source_language = data.get("source_language")
+		else:
+			with open(config_path, "r", encoding="utf-8") as f:
+				for line in f:
+					stripped = line.strip()
+					if not stripped or stripped.startswith("#"):
+						continue
+					value = _parse_source_language_from_line(stripped)
+					if value:
+						source_language = value
+						break
+	except Exception as e:
+		print(f"Error reading config file: {e}")
+		return None
+
+	if not source_language:
+		print(f"Error: source_language not set in {config_path}")
+		return None
+
+	source_language = source_language.strip().lower()
+	if source_language.startswith("l_"):
+		source_language = source_language[2:]
+
+	if source_language not in LANGUAGE_CONFIG:
+		valid = ", ".join(sorted(LANGUAGE_CONFIG.keys()))
+		print(f"Error: Unsupported source_language '{source_language}'.")
+		print(f"Supported values: {valid}")
+		return None
+
+	return source_language
 
 def get_translator():
 	try:
@@ -129,10 +199,13 @@ def should_auto_skip(masked_text):
 	# If nothing is left, it was only placeholders/punctuation
 	return len(stripped) == 0
 
-def process_file(translator, filepath, target_folder_name, deepl_code):
+def process_file(translator, filepath, target_folder_name, deepl_code, source_lang_id, source_lang_deepl):
 	filename = os.path.basename(filepath)
 	new_lang_id = f"l_{target_folder_name}"
-	new_filename = filename.replace(SOURCE_LANG_ID, new_lang_id)
+	if source_lang_id in filename:
+		new_filename = filename.replace(source_lang_id, new_lang_id)
+	else:
+		new_filename = filename
 
 	target_dir = os.path.join(BASE_LOC_PATH, target_folder_name)
 	os.makedirs(target_dir, exist_ok=True)
@@ -151,7 +224,7 @@ def process_file(translator, filepath, target_folder_name, deepl_code):
 		stripped_line = line.strip()
 
 		# 1. Handle Language Header
-		if stripped_line.startswith(f"{SOURCE_LANG_ID}:"):
+		if stripped_line.startswith(f"{source_lang_id}:"):
 			new_lines.append(f"{new_lang_id}:\n")
 			continue
 
@@ -194,7 +267,7 @@ def process_file(translator, filepath, target_folder_name, deepl_code):
 					result = translator.translate_text(
 						masked_text,
 						target_lang=deepl_code,
-						source_lang="EN"
+						source_lang=source_lang_deepl
 					)
 
 					is_valid, msg = validate_translation(result.text, placeholders)
@@ -221,7 +294,14 @@ def main():
 	if not translator:
 		return
 
-	source_dir = os.path.join(BASE_LOC_PATH, SOURCE_LANG_FOLDER)
+	source_language = load_source_language(CONFIG_PATH)
+	if not source_language:
+		return
+
+	source_lang_id = LANGUAGE_CONFIG[source_language]["loc_id"]
+	source_lang_deepl = LANGUAGE_CONFIG[source_language]["deepl"]
+
+	source_dir = os.path.join(BASE_LOC_PATH, source_language)
 
 	if not os.path.exists(source_dir):
 		print(f"Error: Source directory not found: {source_dir}")
@@ -232,7 +312,16 @@ def main():
 			if file.endswith(".yml"):
 				source_filepath = os.path.join(root, file)
 				for folder_name, deepl_code in TARGET_LANGUAGES.items():
-					process_file(translator, source_filepath, folder_name, deepl_code)
+					if folder_name == source_language:
+						continue
+					process_file(
+						translator,
+						source_filepath,
+						folder_name,
+						deepl_code,
+						source_lang_id,
+						source_lang_deepl
+					)
 
 	print("Translation complete!")
 
