@@ -14,7 +14,7 @@ from steamworks import STEAMWORKS
 
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)
 
-# Paths/config used by the uploader.
+# Paths & Configs
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.toml")
 METADATA_PATH = os.path.join(ROOT_DIR, ".metadata", "metadata.json")
 WORKSHOP_DESCRIPTION_PATH = os.path.join(ROOT_DIR, "assets", "workshop", "workshop-description.txt")
@@ -212,13 +212,14 @@ def main():
 
 		# Use the Workshop interface for the update flow.
 		workshop = steam.Workshop
-		handle = workshop.StartItemUpdate(APP_ID, item_id)
-		if not handle:
-			print("Error: StartItemUpdate failed. Check app ID and item ID.")
-			return 1
 
 		for update in updates:
-			# Each language update must set the Workshop update language first.
+			handle = workshop.StartItemUpdate(APP_ID, item_id)
+			if not handle:
+				print("Error: StartItemUpdate failed. Check app ID and item ID.")
+				return 1
+
+			# Set the Workshop update language.
 			lang_label = f"{update['lang']} ({update['steam_lang']})"
 			lang_result = steam.Workshop_SetItemUpdateLanguage(handle, update["steam_lang"].encode())
 			if lang_result is False:
@@ -239,11 +240,10 @@ def main():
 					print(f"Error: SetItemDescription failed for {lang_label}.")
 					return 1
 
-		print("Submitting workshop update...")
-		# Submit with an empty change note per project preference.
-		workshop.SubmitItemUpdate(handle, "")
+			# Just using an empty change note.
+			workshop.SubmitItemUpdate(handle, "")
 
-		print("Workshop update submitted. Check Steam client for upload progress.")
+		print("Workshop updates submitted. Check Steam client for upload progress.")
 		return 0
 	finally:
 		# Always restore cwd.
