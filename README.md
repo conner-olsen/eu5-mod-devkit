@@ -23,6 +23,7 @@ eu5-mod-devkit/
 ├── scripts/                    # Automation scripts
 │   ├── setup.py                 # Initial project setup script
 │   ├── prepare-release.py       # Auto-manages separate release and development versions of your mod
+│   ├── translate.py             # Auto-translate localization files with DeepL
 │   ├── create-devkit-release.sh # (Internal) Devkit release management
 │   └── reset-release.sh         # (Internal) Devkit release management
 ├── in_game/common/dummy.txt    # stub file to create the folder
@@ -33,9 +34,10 @@ eu5-mod-devkit/
 ├── .editorconfig               # Standardizes editor settings for EU5
 ├── .gitattributes              # Makes all text files use crlf line endings
 ├── .gitignore                  # Standard gitignore
+├── .env-template               # For setting the DeepL api key, will be copied to .env in the release branch.
 ├── LICENSE                     # (Internal) Project license
 ├── README.md                   # (Internal) This file
-└── README-TEMPLATE.md          # GitHub repo readme template, will be copied to README.md in the released branch.
+└── README-TEMPLATE.md          # GitHub repo readme template, will be copied to README.md in the release branch.
 ```
 * Files marked as `(internal)` are not included in the release version, and are just for the devkit's own use. You do not need to copy them, and they will not be included if you run the setup script.
 
@@ -60,7 +62,7 @@ After running, the setup script will delete itself and should not need to be use
 Simply copy any files you want to use from the `release` branch into your mod folder.
 Note that without the devkit remote, you will have to manually check and copy over updates to the devkit.
 
-If you are familiar with Git, you can also manually add the remote for ease of updating. 
+If you are familiar with Git, you can also manually add the remote for ease of updating.
 
 ## Provided Tools
 
@@ -78,7 +80,7 @@ To use the script:
    * Make the release thumbnail `.metadata/thumbnail-release.png` (if it does not exist, the `.metadata/thumbnail.png` will be used for both).
 3. **(optionally) Configure Included Files**: By default, the release version only includes the `.metadata/`, `in_game/` and `main_menu/` folders.
    * If you want to include more files (i.e., LICENSE), you can add them to the `SOURCES` list in `scripts/prepare-release.py`.
-3. **Run `prepare-release.py`**: When ready to create/update the release version to upload to the workshop:
+4. **Run `prepare-release.py`**: When ready to create/update the release version to upload to the workshop:
    ```bash
    python scripts/prepare-release.py
    ```
@@ -86,6 +88,24 @@ To use the script:
    * The metadata.json file from `.metadata/` with " Dev" and ".dev" removed from the name and id respectively.
    * The thumbnail from `.metadata/thumbnail-release.png` or the default thumbnail if it doesn't exist.
    * The `in_game/`, `main_menu/` and any other files specified in the `SOURCES` list of `scripts/prepare-release.py`.
+
+### translate.py
+Auto-translates localization files using the DeepL API.
+It reads from `main_menu/localization/english` and writes translated `.yml` files for supported languages into `main_menu/localization/<language>/`.
+* It preserves EU5 localization tags like `[...], $...$, @...!, #...#!`.
+* It will automatically skip lines that consist purely of tags or formatting characters.
+* You can skip translation on specific lines by adding `# NO_TRANSLATE` to the end of any line you want skipped.
+* You can skip blocks by wrapping them in `# NO_TRANSLATE BELOW` and `# NO_TRANSLATE END` (with the latter being optional).
+* Translates from English to all EU5 supported languages.
+
+Setup:
+1. Copy `.env-template` to `.env`.
+2. Add your DeepL API key as `DEEPL_API_KEY=your_key_here`.
+
+To run:
+```bash
+python scripts/translate.py
+```
 
 ## License
 

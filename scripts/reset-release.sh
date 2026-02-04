@@ -30,9 +30,12 @@ git rm -f scripts/create-devkit-release.sh
 git rm -f scripts/reset-release.sh
 git mv -f README-TEMPLATE.md README.md
 
-# 8. Commit and Push
+# 8. Create .env from template for release
+cp -f .env-template .env
+
+# 9. Commit and Push
 git commit -m "$VERSION"
 git push origin devkit-release
 
-# 9. Return to main
+# 10. Return to main
 git checkout main
