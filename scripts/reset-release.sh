@@ -29,6 +29,7 @@ git rm -f README.md
 git rm -f scripts/create-devkit-release.sh
 git rm -f scripts/reset-release.sh
 git mv -f README-TEMPLATE.md README.md
+git mv -f .env-template .env
 
 # 8. Create .env from template for release
 cp -f .env-template .env
