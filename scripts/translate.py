@@ -58,6 +58,7 @@ HASH_FILE_VERSION = 1
 
 KEY_VALUE_RE = re.compile(r'^(\s*)([^:#]+):\s*"(.*)"(.*)$')
 HEADER_RE = re.compile(r'^\s*l_[^:]+:\s*$')
+LOCK_RE = re.compile(r'#\s*LOCK\b')
 
 # ==========================================
 # LOGIC
@@ -311,6 +312,16 @@ def translate_value(translator, key, original_value, deepl_code, source_lang_dee
 def build_line(indent, key, text, comment):
 	return f'{indent}{key}: "{text}"{comment}\n'
 
+def is_locked_line(line):
+	"""
+	Detect a # LOCK comment on an output line to prevent overwrites.
+	"""
+	match = KEY_VALUE_RE.match(line)
+	if not match:
+		return False
+	comment = match.group(4) if match.group(4) else ""
+	return bool(LOCK_RE.search(comment))
+
 def ensure_target_header(target_lines, new_lang_id):
 	"""
 	Ensure the localization header matches the target language.
@@ -361,6 +372,8 @@ def update_target_lines(translator, target_lines, source_entries, changed_keys, 
 		if key in target_index:
 			line_index = target_index[key]
 			existing_line = target_lines[line_index]
+			if is_locked_line(existing_line):
+				continue
 			match = KEY_VALUE_RE.match(existing_line)
 			if match:
 				indent = match.group(1)
