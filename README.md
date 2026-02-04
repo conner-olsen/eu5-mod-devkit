@@ -100,6 +100,7 @@ It reads from `main_menu/localization/<source_language>` and writes translated `
 * Only translates keys that changed since the last run, updating those keys in-place without rewriting the rest of the file.
 * Tracks per-key hashes in `scripts/.translate_hashes.json` (delete this file to force a full re-translate).
 * You can lock a translated output line by adding `# LOCK` at the end; locked lines are never overwritten even if the source changes.
+* If you want to completely disable a output language, you can delete its entry in `TARGET_LANGUAGES` from `scripts/config.toml`.
 
 Setup:
 1. Copy `.env-template` to `.env`.
