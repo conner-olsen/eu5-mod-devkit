@@ -1,27 +1,28 @@
 import json
 import os
 import re
-import shutil
 import sys
 
 import tomllib
-from steamworks import STEAMWORKS
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DEPENDENCIES_DIR = os.path.join(SCRIPT_DIR, "dependencies")
+# Allow importing the bundled steamworks module from scripts/dependencies/steamworks.
+sys.path.insert(0, DEPENDENCIES_DIR)
+
+from steamworks import STEAMWORKS
+
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)
 
+# Paths/config used by the uploader.
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.toml")
 METADATA_PATH = os.path.join(ROOT_DIR, ".metadata", "metadata.json")
 WORKSHOP_DESCRIPTION_PATH = os.path.join(ROOT_DIR, "assets", "workshop", "workshop-description.txt")
 TRANSLATIONS_DIR = os.path.join(ROOT_DIR, "assets", "workshop", "translations")
 APP_ID = 3450310
-DEPENDENCIES_DIR = os.path.join(SCRIPT_DIR, "dependencies")
-STEAM_DEPENDENCY_FILES = (
-	"steam_api64.dll",
-	"SteamworksPy64.dll",
-	"steam_appid.txt"
-)
+STEAM_LANG_FILENAME_RE = re.compile(r"^(title|description)_(.+)\.txt$")
 
+# Steam language codes expected by Workshop updates.
 LANGUAGE_TO_STEAM = {
 	"english": "english",
 	"french": "french",
@@ -37,13 +38,13 @@ LANGUAGE_TO_STEAM = {
 }
 
 def load_config(config_path):
-	if not os.path.exists(config_path):
-		print(f"Error: Config file not found: {config_path}")
-		return None, None, None
-
+	"""Load config.toml values needed for Workshop uploads."""
 	try:
 		with open(config_path, "rb") as f:
 			data = tomllib.load(f)
+	except FileNotFoundError:
+		print(f"Error: Config file not found: {config_path}")
+		return None, None, None
 	except Exception as e:
 		print(f"Error reading config file: {e}")
 		return None, None, None
@@ -67,6 +68,7 @@ def load_config(config_path):
 		print("Error: workshop_upload_item_id not set in config.toml.")
 		return None, None, None
 
+	# The workshop item ID must be a positive integer.
 	item_id = _parse_int(upload_item_id, "item id")
 	if item_id is None:
 		return None, None, None
@@ -78,6 +80,7 @@ def load_config(config_path):
 	return source_language, item_id, dry_run
 
 def read_text(path):
+	"""Read a UTF-8 text file, returning None on missing/failed reads."""
 	try:
 		with open(path, "r", encoding="utf-8-sig") as f:
 			return f.read()
@@ -88,12 +91,13 @@ def read_text(path):
 		return None
 
 def load_mod_title(metadata_path):
-	if not os.path.exists(metadata_path):
-		print(f"Warning: Metadata file not found: {metadata_path}")
-		return None
+	"""Load and sanitize the workshop title from metadata.json."""
 	try:
 		with open(metadata_path, "r", encoding="utf-8-sig") as f:
 			data = json.load(f)
+	except FileNotFoundError:
+		print(f"Warning: Metadata file not found: {metadata_path}")
+		return None
 	except Exception as e:
 		print(f"Warning: Failed to read metadata file '{metadata_path}': {e}")
 		return None
@@ -109,6 +113,7 @@ def load_mod_title(metadata_path):
 	return title.strip()
 
 def _parse_int(value, label):
+	"""Parse a positive integer with a friendly error message."""
 	try:
 		parsed = int(value)
 	except (TypeError, ValueError):
@@ -119,45 +124,8 @@ def _parse_int(value, label):
 		return None
 	return parsed
 
-def _stage_steam_dependencies():
-	if not os.path.isdir(DEPENDENCIES_DIR):
-		print(f"Error: Dependencies folder not found: {DEPENDENCIES_DIR}")
-		return None
-
-	moved = []
-	missing = []
-	for filename in STEAM_DEPENDENCY_FILES:
-		source_path = os.path.join(DEPENDENCIES_DIR, filename)
-		target_path = os.path.join(SCRIPT_DIR, filename)
-
-		if os.path.exists(target_path):
-			continue
-		if not os.path.exists(source_path):
-			missing.append(filename)
-			continue
-
-		shutil.move(source_path, target_path)
-		moved.append(filename)
-
-	if missing:
-		print("Error: Missing Steamworks dependencies:")
-		for filename in missing:
-			print(f"  - {filename}")
-		_restore_steam_dependencies(moved)
-		return None
-
-	return moved
-
-def _restore_steam_dependencies(moved):
-	if not moved:
-		return
-	for filename in reversed(moved):
-		source_path = os.path.join(SCRIPT_DIR, filename)
-		target_path = os.path.join(DEPENDENCIES_DIR, filename)
-		if os.path.exists(source_path):
-			shutil.move(source_path, target_path)
-
 def build_language_updates(source_language):
+	"""Collect base and translated workshop title/description payloads."""
 	base_description = read_text(WORKSHOP_DESCRIPTION_PATH)
 	if base_description is None:
 		print(f"Error: Workshop description file not found: {WORKSHOP_DESCRIPTION_PATH}")
@@ -165,28 +133,25 @@ def build_language_updates(source_language):
 
 	base_title = load_mod_title(METADATA_PATH)
 
-	updates = []
-	updates.append({
+	# Always include the source-language title/description.
+	updates = [{
 		"lang": source_language,
 		"steam_lang": LANGUAGE_TO_STEAM[source_language],
 		"title": base_title,
 		"description": base_description
-	})
+	}]
 
 	if not os.path.exists(TRANSLATIONS_DIR):
 		print(f"Warning: Translations folder not found: {TRANSLATIONS_DIR}")
 		return updates
 
+	# Collect any translated workshop files that exist on disk.
 	translations = {}
 	for filename in os.listdir(TRANSLATIONS_DIR):
-		if not filename.endswith(".txt"):
-			continue
-		match = re.match(r"^(title|description)_(.+)\.txt$", filename)
+		match = STEAM_LANG_FILENAME_RE.match(filename)
 		if not match:
 			continue
 		kind, lang = match.group(1), match.group(2)
-		if not lang:
-			continue
 		path = os.path.join(TRANSLATIONS_DIR, filename)
 		text = read_text(path)
 		if text is None:
@@ -200,8 +165,6 @@ def build_language_updates(source_language):
 		if lang not in LANGUAGE_TO_STEAM:
 			print(f"Warning: No Steam language mapping for '{lang}', skipping.")
 			continue
-		if entry["title"] is None and entry["description"] is None:
-			continue
 		updates.append({
 			"lang": lang,
 			"steam_lang": LANGUAGE_TO_STEAM[lang],
@@ -211,14 +174,8 @@ def build_language_updates(source_language):
 
 	return updates
 
-def _set_item_update_language(workshop, steam, handle, language):
-	if hasattr(workshop, "SetItemUpdateLanguage"):
-		return workshop.SetItemUpdateLanguage(handle, language)
-	if hasattr(steam, "Workshop_SetItemUpdateLanguage"):
-		return steam.Workshop_SetItemUpdateLanguage(handle, language.encode())
-	return None
-
 def main():
+	"""Upload workshop titles/descriptions for all available languages."""
 	(
 		source_language,
 		item_id,
@@ -234,39 +191,26 @@ def main():
 
 	print("Workshop language updates:")
 	for update in updates:
-		title_state = "title" if update["title"] is not None else "no-title"
-		desc_state = "description" if update["description"] is not None else "no-description"
-		print(f"  - {update['lang']} ({update['steam_lang']}): {title_state}, {desc_state}")
+		print(
+			f"  - {update['lang']} ({update['steam_lang']}): "
+			f"{'title' if update['title'] is not None else 'no-title'}, "
+			f"{'description' if update['description'] is not None else 'no-description'}"
+		)
 
 	if dry_run:
 		print("Dry run enabled; no upload performed.")
 		return 0
 
-	moved_dependencies = _stage_steam_dependencies()
-	if moved_dependencies is None:
-		return 1
-
 	cwd_before = os.getcwd()
 	try:
-		os.chdir(SCRIPT_DIR)
+		# SteamworksPy resolves DLL/appid from the current working directory.
+		os.chdir(DEPENDENCIES_DIR)
+		# Load the native Steamworks wrapper.
 		steam = STEAMWORKS()
 
-		if hasattr(steam, "initialize"):
-			init_result = steam.initialize()
-		elif hasattr(steam, "init"):
-			init_result = steam.init()
-		else:
-			print("Error: Steamworks instance has no initialize/init method.")
-			return 1
+		steam.initialize()
 
-		if init_result is False:
-			print("Error: Steamworks initialization returned false.")
-			return 1
-
-		if not hasattr(steam, "Workshop"):
-			print("Error: steamworks Workshop API not available on this install.")
-			return 1
-
+		# Use the Workshop interface for the update flow.
 		workshop = steam.Workshop
 		handle = workshop.StartItemUpdate(APP_ID, item_id)
 		if not handle:
@@ -274,38 +218,36 @@ def main():
 			return 1
 
 		for update in updates:
+			# Each language update must set the Workshop update language first.
 			lang_label = f"{update['lang']} ({update['steam_lang']})"
-			lang_result = _set_item_update_language(workshop, steam, handle, update["steam_lang"])
-			if lang_result is None:
-				print("Error: steamworks UGC API missing method 'SetItemUpdateLanguage'.")
-				return 1
+			lang_result = steam.Workshop_SetItemUpdateLanguage(handle, update["steam_lang"].encode())
 			if lang_result is False:
 				print(f"Error: SetItemUpdateLanguage failed for {lang_label}.")
 				return 1
 
 			if update["title"] is not None:
+				# Title is optional per language.
 				title_result = workshop.SetItemTitle(handle, update["title"])
 				if title_result is False:
 					print(f"Error: SetItemTitle failed for {lang_label}.")
 					return 1
 
 			if update["description"] is not None:
+				# Description is optional per language.
 				desc_result = workshop.SetItemDescription(handle, update["description"])
 				if desc_result is False:
 					print(f"Error: SetItemDescription failed for {lang_label}.")
 					return 1
 
 		print("Submitting workshop update...")
-		submit_result = workshop.SubmitItemUpdate(handle, "")
-		if submit_result is False or submit_result == 0:
-			print("Error: SubmitItemUpdate failed.")
-			return 1
+		# Submit with an empty change note per project preference.
+		workshop.SubmitItemUpdate(handle, "")
 
 		print("Workshop update submitted. Check Steam client for upload progress.")
 		return 0
 	finally:
+		# Always restore cwd.
 		os.chdir(cwd_before)
-		_restore_steam_dependencies(moved_dependencies)
 
 if __name__ == "__main__":
 	sys.exit(main())
