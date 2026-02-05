@@ -37,7 +37,7 @@ eu5-mod-devkit/
 ├── .editorconfig               # Standardizes editor settings for EU5
 ├── .gitattributes              # Makes all text files use crlf line endings
 ├── .gitignore                  # Standard gitignore
-├── .env-template               # For setting the DeepL api key, will be copied to .env in the release branch.
+├── .env-template               # For setting the DeepL & Gemini api keys
 ├── LICENSE                     # (Internal) Project license
 ├── README.md                   # (Internal) This file
 └── README-TEMPLATE.md          # GitHub repo readme template, will be copied to README.md in the release branch.
