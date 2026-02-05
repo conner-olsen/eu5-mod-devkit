@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import json
+import html
 import hashlib
 import time
 import urllib.request
@@ -93,6 +94,8 @@ HASH_FILE_VERSION = 1
 KEY_VALUE_RE = re.compile(r'^(\s*)([^:#]+):\s*"(.*)"(.*)$')
 HEADER_RE = re.compile(r'^\s*l_[^:]+:\s*$')
 LOCK_RE = re.compile(r'#\s*LOCK\b')
+XML_PLACEHOLDER_TAG = "locvar"
+DEEPL_SPLIT_SENTENCES_LOCALIZATION = deepl.api_data.SplitSentences.OFF
 
 # ==========================================
 # LOGIC
@@ -270,6 +273,8 @@ def mask_text_var(text):
 		placeholders.append(match.group(0))
 		return f'[VAR_{idx}]'
 
+	# 0. Protect escaped newlines so they survive translation.
+	text = re.sub(r'(\\n)', replace_match, text)
 	# 1. Protect [...]
 	text = re.sub(r'(\[.*?\])', replace_match, text)
 	# 2. Protect $...$
@@ -280,6 +285,26 @@ def mask_text_var(text):
 	text = re.sub(r'(#[a-zA-Z0-9_]+|#!)', replace_match, text)
 
 	return text, placeholders
+
+def escape_xml(text):
+	"""Escape XML special chars so DeepL XML tag handling stays valid."""
+	return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+def unescape_xml(text):
+	"""Reverse escape_xml using standard HTML entity unescape."""
+	return html.unescape(text)
+
+def mask_text_var_xml_from_masked(masked_text, placeholders):
+	"""Convert [VAR_x] placeholders into XML tags for DeepL tag handling."""
+	escaped = escape_xml(masked_text)
+	def replace_match(match):
+		try:
+			idx = int(match.group(1))
+			placeholder_text = placeholders[idx]
+		except (ValueError, IndexError):
+			placeholder_text = match.group(0)
+		return f'<{XML_PLACEHOLDER_TAG} id="{match.group(1)}">{escape_xml(placeholder_text)}</{XML_PLACEHOLDER_TAG}>'
+	return re.sub(r'\[VAR_(\d+)\]', replace_match, escaped)
 
 def unmask_text_var(text, placeholders):
 	"""
@@ -297,17 +322,103 @@ def unmask_text_var(text, placeholders):
 	# Regex matches: Optional [, whitespace, VAR_, Digit, whitespace, Optional ]
 	return re.sub(r'\[?\s*VAR_(\d+)\s*\]?', restore_match, text)
 
+def unmask_text_var_xml(text, placeholders):
+	"""
+	Restores <locvar id="0">...</locvar> -> Original Text.
+	"""
+	def restore_match(match):
+		try:
+			idx = int(match.group(1))
+			if 0 <= idx < len(placeholders):
+				return placeholders[idx]
+		except ValueError:
+			pass
+		return match.group(0)
+
+	# Replace paired tags with or without content.
+	text = re.sub(
+		rf'<{XML_PLACEHOLDER_TAG}\s+id=[\'"](\d+)[\'"]\s*>.*?</{XML_PLACEHOLDER_TAG}\s*>',
+		restore_match,
+		text,
+		flags=re.DOTALL
+	)
+	# Replace self-closing tags.
+	return re.sub(
+		rf'<{XML_PLACEHOLDER_TAG}\s+id=[\'"](\d+)[\'"]\s*/\s*>',
+		restore_match,
+		text
+	)
+
+def missing_placeholder_indices(translated_text, placeholders):
+	"""Return indices of placeholders missing from translated_text (VAR or XML-tagged)."""
+	found_set = set(int(x) for x in re.findall(r'VAR_(\d+)', translated_text))
+	found_set.update(
+		int(x)
+		for x in re.findall(rf'<{XML_PLACEHOLDER_TAG}\s+id=[\'"](\d+)[\'"]', translated_text)
+	)
+
+	missing = []
+	for i, placeholder in enumerate(placeholders):
+		if i in found_set:
+			continue
+		if placeholder and placeholder in translated_text:
+			continue
+		missing.append(i)
+	return missing
+
+def insert_missing_placeholders(text, placeholders, missing_indices):
+	"""Append missing placeholders, keeping punctuation at the end if possible."""
+	if not missing_indices:
+		return text
+	missing_tokens = [placeholders[i] for i in missing_indices]
+	suffix = "".join(missing_tokens)
+	if not text:
+		return suffix
+
+	match = re.search(r'([.!?。！？])\s*$', text)
+	if match:
+		# Keep sentence-ending punctuation last to avoid odd UI output.
+		idx = match.start(1)
+		return text[:idx] + suffix + text[idx:]
+	return text + suffix
+
+def translate_deepl_xml(translator, masked_text, placeholders, deepl_code, source_lang_deepl, split_sentences):
+	"""Translate masked text using XML tag handling."""
+	masked_xml = mask_text_var_xml_from_masked(masked_text, placeholders)
+	result = translator.translate_text(
+		masked_xml,
+		target_lang=deepl_code,
+		source_lang=source_lang_deepl,
+		tag_handling="xml",
+		non_splitting_tags=[XML_PLACEHOLDER_TAG],
+		ignore_tags=[XML_PLACEHOLDER_TAG],
+		split_sentences=split_sentences,
+		preserve_formatting=True
+	)
+	translated_raw = unescape_xml(result.text)
+	missing = missing_placeholder_indices(translated_raw, placeholders)
+	translated_text = unmask_text_var_xml(translated_raw, placeholders)
+	translated_text = unmask_text_var(translated_text, placeholders)
+	return translated_text, missing
+
+def translate_deepl_plain(translator, masked_text, placeholders, deepl_code, source_lang_deepl, split_sentences):
+	"""Translate masked text without XML tag handling."""
+	result = translator.translate_text(
+		masked_text,
+		target_lang=deepl_code,
+		source_lang=source_lang_deepl,
+		split_sentences=split_sentences,
+		preserve_formatting=True
+	)
+	missing = missing_placeholder_indices(result.text, placeholders)
+	translated_text = unmask_text_var(result.text, placeholders)
+	return translated_text, missing
+
 def validate_translation(translated_text, placeholders):
 	"""
 	Checks if DeepL dropped any tags.
 	"""
-	found_indices = re.findall(r'VAR_(\d+)', translated_text)
-	found_set = set(int(x) for x in found_indices)
-
-	missing_indices = []
-	for i in range(len(placeholders)):
-		if i not in found_set:
-			missing_indices.append(i)
+	missing_indices = missing_placeholder_indices(translated_text, placeholders)
 
 	if missing_indices:
 		missing_tags = [placeholders[i] for i in missing_indices]
@@ -388,17 +499,42 @@ def translate_value(translator, key, original_value, deepl_code, source_lang_dee
 		return original_value
 
 	try:
-		result = translator.translate_text(
+		split_sentences = DEEPL_SPLIT_SENTENCES_LOCALIZATION if placeholders else None
+
+		translated_text, missing_xml = translate_deepl_xml(
+			translator,
 			masked_text,
-			target_lang=deepl_code,
-			source_lang=source_lang_deepl
+			placeholders,
+			deepl_code,
+			source_lang_deepl,
+			split_sentences
 		)
 
-		is_valid, msg = validate_translation(result.text, placeholders)
-		if not is_valid:
-			print(f"  [WARNING] {target_folder_name} issue in '{key}': {msg}")
+		translated_plain = None
+		missing_plain = None
+		if missing_xml:
+			translated_plain, missing_plain = translate_deepl_plain(
+				translator,
+				masked_text,
+				placeholders,
+				deepl_code,
+				source_lang_deepl,
+				split_sentences
+			)
 
-		translated_text = unmask_text_var(result.text, placeholders)
+		# Choose the translation that preserves more placeholders.
+		if missing_plain is not None and len(missing_plain) < len(missing_xml):
+			translated_text = translated_plain
+			missing = missing_plain
+		else:
+			missing = missing_xml
+
+		if missing:
+			missing_tags = [placeholders[i] for i in missing]
+			print(f"  [WARNING] {target_folder_name} issue in '{key}': Missing tags: {missing_tags}")
+			# If the engine drops tags, reinsert them rather than falling back to English.
+			translated_text = insert_missing_placeholders(translated_text, placeholders, missing)
+
 		translated_text = cleanup_text(translated_text)
 		return translated_text
 
