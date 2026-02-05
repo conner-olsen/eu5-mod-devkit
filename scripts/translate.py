@@ -37,6 +37,9 @@ CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.toml")
 METADATA_PATH = os.path.join(ROOT_DIR, ".metadata", "metadata.json")
 WORKSHOP_DESCRIPTION_PATH = os.path.join(ROOT_DIR, "assets", "workshop", "workshop-description.txt")
 WORKSHOP_TRANSLATIONS_DIR = os.path.join(ROOT_DIR, "assets", "workshop", "translations")
+WORKSHOP_TRANSLATION_FILENAME = "workshop_{lang}.txt"
+WORKSHOP_TITLE_MARKER = "===WORKSHOP_TITLE==="
+WORKSHOP_DESCRIPTION_MARKER = "===WORKSHOP_DESCRIPTION==="
 
 ALLOWED_WORKSHOP_DESCRIPTION_TRANSLATORS = {"deepl", "gemini-3-flash"}
 ALLOWED_WORKSHOP_TITLE_TRANSLATORS = {"deepl", "gemini-3-flash"}
@@ -84,7 +87,7 @@ LANGUAGE_DISPLAY_NAMES = {
 }
 
 # Cache of source key/value hashes to avoid re-translating unchanged lines.
-HASHES_PATH = os.path.join(SCRIPT_DIR, ".translate_hashes.json")
+HASHES_PATH = os.path.join(SCRIPT_DIR, "dependencies", ".translate_hashes.json")
 HASH_FILE_VERSION = 1
 
 KEY_VALUE_RE = re.compile(r'^(\s*)([^:#]+):\s*"(.*)"(.*)$')
@@ -661,6 +664,48 @@ def load_workshop_description(description_path):
 		print(f"Warning: Failed to read workshop description '{description_path}': {e}")
 		return None
 
+def parse_workshop_translation(text):
+	"""Extract title/description sections from a combined workshop translation file."""
+	title = None
+	description = None
+	current = None
+	buffer = []
+
+	def flush():
+		nonlocal title, description, buffer, current
+		content = "".join(buffer)
+		if current == "title":
+			cleaned = content.strip()
+			title = cleaned if cleaned else None
+		elif current == "description":
+			description = content
+		buffer = []
+
+	for line in text.splitlines(keepends=True):
+		stripped = line.strip()
+		if stripped == WORKSHOP_TITLE_MARKER:
+			flush()
+			current = "title"
+			continue
+		if stripped == WORKSHOP_DESCRIPTION_MARKER:
+			flush()
+			current = "description"
+			continue
+		if current:
+			buffer.append(line)
+
+	flush()
+	return title, description
+
+def build_workshop_translation_text(title, description):
+	"""Build the combined workshop translation file content."""
+	parts = []
+	if title is not None:
+		parts.append(f"{WORKSHOP_TITLE_MARKER}\n{title}\n")
+	if description is not None:
+		parts.append(f"{WORKSHOP_DESCRIPTION_MARKER}\n{description}")
+	return "".join(parts)
+
 def translate_workshop_title(translator, title, deepl_code, source_lang_deepl):
 	"""Translate the workshop title using DeepL."""
 	try:
@@ -865,9 +910,23 @@ def translate_workshop_assets(
 		if folder_name == source_language:
 			continue
 
+		translation_path = os.path.join(
+			WORKSHOP_TRANSLATIONS_DIR,
+			WORKSHOP_TRANSLATION_FILENAME.format(lang=folder_name)
+		)
+		existing_title = None
+		existing_description = None
+		if os.path.exists(translation_path):
+			try:
+				with open(translation_path, "r", encoding="utf-8") as f:
+					existing_title, existing_description = parse_workshop_translation(f.read())
+			except Exception as e:
+				print(f"Warning: Failed to read workshop translation '{translation_path}': {e}")
+
+		file_changed = False
+
 		if title:
-			title_path = os.path.join(WORKSHOP_TRANSLATIONS_DIR, f"title_{folder_name}.txt")
-			if not os.path.exists(title_path):
+			if existing_title is None:
 				provider_label = "gemini-3-flash" if workshop_title_translator == "gemini-3-flash" else "deepl"
 				print(f"Translating workshop title -> {folder_name} ({provider_label})...")
 				if workshop_title_translator == "gemini-3-flash":
@@ -885,14 +944,13 @@ def translate_workshop_assets(
 						source_lang_deepl
 					)
 				if translated_title is not None:
-					with open(title_path, "w", encoding="utf-8") as f:
-						f.write(translated_title)
+					existing_title = translated_title
+					file_changed = True
 			else:
 				print(f"Workshop title exists -> {folder_name}; skipping.")
 
 		if description is not None:
-			description_path = os.path.join(WORKSHOP_TRANSLATIONS_DIR, f"description_{folder_name}.txt")
-			needs_description = description_changed or not os.path.exists(description_path)
+			needs_description = description_changed or existing_description is None
 			if needs_description:
 				provider_label = "gemini-3-flash" if workshop_description_translator == "gemini-3-flash" else "deepl"
 				print(f"Translating workshop description -> {folder_name} ({provider_label})...")
@@ -913,10 +971,16 @@ def translate_workshop_assets(
 				if translated_description is None:
 					description_success = False
 					continue
-				with open(description_path, "w", encoding="utf-8") as f:
-					f.write(translated_description)
+				existing_description = translated_description
+				file_changed = True
 			else:
 				print(f"Workshop description unchanged -> {folder_name}; skipping.")
+
+		if file_changed or not os.path.exists(translation_path):
+			if existing_title is None and existing_description is None:
+				continue
+			with open(translation_path, "w", encoding="utf-8") as f:
+				f.write(build_workshop_translation_text(existing_title, existing_description))
 
 	if description is not None and description_changed and description_success:
 		workshop_cache["description_hash"] = description_hash

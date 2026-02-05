@@ -20,7 +20,9 @@ METADATA_PATH = os.path.join(ROOT_DIR, ".metadata", "metadata.json")
 WORKSHOP_DESCRIPTION_PATH = os.path.join(ROOT_DIR, "assets", "workshop", "workshop-description.txt")
 TRANSLATIONS_DIR = os.path.join(ROOT_DIR, "assets", "workshop", "translations")
 APP_ID = 3450310
-STEAM_LANG_FILENAME_RE = re.compile(r"^(title|description)_(.+)\.txt$")
+WORKSHOP_TRANSLATION_FILENAME_RE = re.compile(r"^workshop_(.+)\.txt$")
+WORKSHOP_TITLE_MARKER = "===WORKSHOP_TITLE==="
+WORKSHOP_DESCRIPTION_MARKER = "===WORKSHOP_DESCRIPTION==="
 
 # Steam language codes expected by Workshop updates.
 LANGUAGE_TO_STEAM = {
@@ -119,6 +121,39 @@ def _parse_int(value, label):
 		return None
 	return parsed
 
+def parse_workshop_translation(text):
+	"""Extract title/description sections from a combined workshop translation file."""
+	title = None
+	description = None
+	current = None
+	buffer = []
+
+	def flush():
+		nonlocal title, description, buffer, current
+		content = "".join(buffer)
+		if current == "title":
+			cleaned = content.strip()
+			title = cleaned if cleaned else None
+		elif current == "description":
+			description = content
+		buffer = []
+
+	for line in text.splitlines(keepends=True):
+		stripped = line.strip()
+		if stripped == WORKSHOP_TITLE_MARKER:
+			flush()
+			current = "title"
+			continue
+		if stripped == WORKSHOP_DESCRIPTION_MARKER:
+			flush()
+			current = "description"
+			continue
+		if current:
+			buffer.append(line)
+
+	flush()
+	return title, description
+
 def build_language_updates(source_language):
 	"""Collect base and translated workshop title/description payloads."""
 	base_description = read_text(WORKSHOP_DESCRIPTION_PATH)
@@ -143,16 +178,18 @@ def build_language_updates(source_language):
 	# Collect any translated workshop files that exist on disk.
 	translations = {}
 	for filename in os.listdir(TRANSLATIONS_DIR):
-		match = STEAM_LANG_FILENAME_RE.match(filename)
+		match = WORKSHOP_TRANSLATION_FILENAME_RE.match(filename)
 		if not match:
 			continue
-		kind, lang = match.group(1), match.group(2)
+		lang = match.group(1)
 		path = os.path.join(TRANSLATIONS_DIR, filename)
 		text = read_text(path)
 		if text is None:
 			continue
-		entry = translations.setdefault(lang, {"title": None, "description": None})
-		entry[kind] = text
+		title_text, desc_text = parse_workshop_translation(text)
+		if title_text is None and desc_text is None:
+			continue
+		translations[lang] = {"title": title_text, "description": desc_text}
 
 	for lang, entry in translations.items():
 		if lang == source_language:

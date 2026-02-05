@@ -130,7 +130,7 @@ python scripts/translate.py
 Notes:
   * Translated workshop titles/descriptions are written to `assets/workshop/translations/`.
   * Workshop descriptions are re-translated only when `assets/workshop/workshop-description.txt` changes, or when the selected provider changes.
-  * Hashes are stored in `scripts/.translate_hashes.json` deleting this file will force re-translation of all lines.
+  * Hashes are stored in `scripts/dependencies/.translate_hashes.json` deleting this file will force re-translation of all lines.
   * If you want to completely disable an output language, you can delete its entry in `TARGET_LANGUAGES` from `scripts/translate.py`.
   * Localization keys that have not been changed since the last translation are skipped to avoid unnecessary API calls.
   * Workshop descriptions are translated each time the description file changes.
@@ -147,8 +147,8 @@ Setup:
 1. Make sure Steam is running and you are logged into the account that owns the workshop item.
 2. Ensure your workshop description exists at `assets/workshop/workshop-description.txt`.
 3. (optional) Run `translate.py` with `translate_workshop = true` to generate:
-   * `assets/workshop/translations/title_<language>.txt`
-   * `assets/workshop/translations/description_<language>.txt`
+   * `assets/workshop/translations/workshop_<language>.txt`
+     * Contains both title and description, separated by `===WORKSHOP_TITLE===` and `===WORKSHOP_DESCRIPTION===`.
 4. Set the upload settings in `scripts/config.toml`:
    * `workshop_upload_item_id` The numeric ID at the end of your mod's Workshop URL.
 	 ![mod-id-location.png](assets/images/mod-id-location.png)
