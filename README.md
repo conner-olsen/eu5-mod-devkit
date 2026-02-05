@@ -164,4 +164,6 @@ python scripts/upload-mod-pages.py
 
 ## License
 
-This project is licensed under the terms found in the [LICENSE](LICENSE) file.
+This project is licensed under the GNU General Public License v3.0; use and modification are allowed with or without attribution.
+
+See the [LICENSE](LICENSE) file for details.
