@@ -23,6 +23,7 @@ APP_ID = 3450310
 WORKSHOP_TRANSLATION_FILENAME_RE = re.compile(r"^workshop_(.+)\.txt$")
 WORKSHOP_TITLE_MARKER = "===WORKSHOP_TITLE==="
 WORKSHOP_DESCRIPTION_MARKER = "===WORKSHOP_DESCRIPTION==="
+MAX_DESCRIPTION_LENGTH = 8000
 
 # Steam language codes expected by Workshop updates.
 LANGUAGE_TO_STEAM = {
@@ -154,6 +155,19 @@ def parse_workshop_translation(text):
 	flush()
 	return title, description
 
+def _trim_description(text, lang_label):
+	"""Truncate the description to MAX_DESCRIPTION_LENGTH bytes (UTF-8) and warn if truncated."""
+	if not text:
+		return text
+
+	encoded = text.encode('utf-8')
+	if len(encoded) > MAX_DESCRIPTION_LENGTH:
+		print(f"Warning: Description for '{lang_label}' exceeds {MAX_DESCRIPTION_LENGTH} bytes. Truncating.")
+		# Truncate to MAX_DESCRIPTION_LENGTH bytes and decode, ignoring incomplete characters
+		truncated = encoded[:MAX_DESCRIPTION_LENGTH].decode('utf-8', errors='ignore')
+		return truncated
+	return text
+
 def build_language_updates(source_language):
 	"""Collect base and translated workshop title/description payloads."""
 	base_description = read_text(WORKSHOP_DESCRIPTION_PATH)
@@ -161,6 +175,7 @@ def build_language_updates(source_language):
 		print(f"Error: Workshop description file not found: {WORKSHOP_DESCRIPTION_PATH}")
 		return None
 
+	base_description = _trim_description(base_description, source_language)
 	base_title = load_mod_title(METADATA_PATH)
 
 	# Always include the source-language title/description.
@@ -189,6 +204,8 @@ def build_language_updates(source_language):
 		title_text, desc_text = parse_workshop_translation(text)
 		if title_text is None and desc_text is None:
 			continue
+
+		desc_text = _trim_description(desc_text, lang)
 		translations[lang] = {"title": title_text, "description": desc_text}
 
 	for lang, entry in translations.items():
