@@ -702,6 +702,7 @@ def process_file(
 	source_lang_deepl,
 	changed_keys
 ):
+	"""Translate/update one localization file for a single target language."""
 	filename = os.path.basename(source_filepath)
 	new_lang_id = f"l_{target_folder_name}"
 	if source_lang_id in filename:
@@ -840,6 +841,7 @@ def render_workshop_translation_text(
 	if not template:
 		return build_workshop_translation_text(translated_title, translated_description)
 
+	# Tokens are optional; missing values become empty strings.
 	replacements = {
 		"[Translated-Title]": translated_title or "",
 		"[Original-Title]": original_title or "",
