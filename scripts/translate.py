@@ -872,12 +872,11 @@ def translate_workshop_title_gemini(text, target_language, system_prompt):
 	"""Translate the workshop title using Gemini."""
 	if text == "":
 		return ""
-	masked_text, placeholders = mask_text_var(text)
 	prompt = _build_gemini_system_prompt(system_prompt, target_language)
 	payload = {
 		"systemInstruction": {"parts": [{"text": prompt}]},
 		"contents": [
-			{"role": "user", "parts": [{"text": masked_text}]}
+			{"role": "user", "parts": [{"text": text}]}
 		]
 	}
 
@@ -890,28 +889,19 @@ def translate_workshop_title_gemini(text, target_language, system_prompt):
 		print("  [Error] Gemini API returned no text.")
 		return None
 
-	is_valid, msg = validate_translation(translated_text, placeholders)
-	if not is_valid:
-		print(f"  [WARNING] Workshop title issue (Gemini): {msg}")
-
-	translated_text = unmask_text_var(translated_text, placeholders)
 	return cleanup_text(translated_text)
 
 def translate_workshop_description(translator, text, deepl_code, source_lang_deepl):
 	"""Translate the full workshop description using DeepL."""
 	if text == "":
 		return ""
-	masked_text, placeholders = mask_text_var(text)
 	try:
 		result = translator.translate_text(
-			masked_text,
+			text,
 			target_lang=deepl_code,
 			source_lang=source_lang_deepl
 		)
-		is_valid, msg = validate_translation(result.text, placeholders)
-		if not is_valid:
-			print(f"  [WARNING] Workshop description issue ({deepl_code}): {msg}")
-		translated_text = unmask_text_var(result.text, placeholders)
+		translated_text = result.text
 		if text.endswith("\n") and not translated_text.endswith("\n"):
 			translated_text += "\n"
 		return translated_text
@@ -998,12 +988,11 @@ def translate_workshop_description_gemini(text, target_language, system_prompt):
 	"""Translate the full workshop description using Gemini."""
 	if text == "":
 		return ""
-	masked_text, placeholders = mask_text_var(text)
 	prompt = _build_gemini_system_prompt(system_prompt, target_language)
 	payload = {
 		"systemInstruction": {"parts": [{"text": prompt}]},
 		"contents": [
-			{"role": "user", "parts": [{"text": masked_text}]}
+			{"role": "user", "parts": [{"text": text}]}
 		]
 	}
 
@@ -1016,11 +1005,6 @@ def translate_workshop_description_gemini(text, target_language, system_prompt):
 		print("  [Error] Gemini API returned no text.")
 		return None
 
-	is_valid, msg = validate_translation(translated_text, placeholders)
-	if not is_valid:
-		print(f"  [WARNING] Workshop description issue (Gemini): {msg}")
-
-	translated_text = unmask_text_var(translated_text, placeholders)
 	if text.endswith("\n") and not translated_text.endswith("\n"):
 		translated_text += "\n"
 	return translated_text
