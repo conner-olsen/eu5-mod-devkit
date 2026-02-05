@@ -166,6 +166,9 @@ run_git(["rm", "-f", "--ignore-unmatch", "in_game/common/dummy.txt"], check=Fals
 # Finalize the commit.
 run_git(["commit", "-m", "Link devkit history"])
 
+# Collect final status messages to print at the end so pip output doesn't trail them.
+final_messages = []
+
 # 5. Overwrite local files but don't commit.
 if overwrite:
     print("Applying template files...")
@@ -178,11 +181,11 @@ if overwrite:
     run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
     run_git(["rm", "-f", "--ignore-unmatch", "in_game/common/dummy.txt"], check=False)
 
-    print("\n--- Devkit Linked Successfully ---")
-    print("If there were any conflicts, they will now appear as uncommited changes for review.")
+    final_messages.append("--- Devkit Linked Successfully ---")
+    final_messages.append("If there were any conflicts, they will now appear as uncommited changes for review.")
 
 else:
-    print("\nSuccess! Devkit linked (local files preserved).")
+    final_messages.append("Success! Devkit linked (local files preserved).")
 
 # 6. Merge .env-template into .env
 merge_env_template(
@@ -202,7 +205,11 @@ elif os.path.exists(legacy_requirements_path):
 else:
     print("Warning: requirements.txt not found. Skipping dependency install.")
 
-# 8. Self-Destruct
+# 8. Final status message (printed last).
+if final_messages:
+    print("\n" + "\n".join(final_messages))
+
+# 9. Self-Destruct
 try:
     os.remove(SCRIPT_FILE)
 except Exception:
