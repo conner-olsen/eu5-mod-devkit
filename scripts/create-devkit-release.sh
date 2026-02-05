@@ -2,7 +2,7 @@
 set -e # Stop the script if any command fails
 
 # --- Configuration ---
-VERSION="Devkit v0.2"
+VERSION="Devkit v0.3"
 
 # --- Script ---
 # 1. Navigate to repo root
@@ -23,10 +23,6 @@ git rm -f scripts/create-devkit-release.sh
 git rm -f scripts/reset-release.sh
 git rm -f assets/images/mod-id-location.png
 git mv -f README-TEMPLATE.md README.md
-git mv -f .env-template .env
-
-# 6. Create .env from template for release
-cp -f .env-template .env
 
 # 7. Commit and Push
 git commit -m "$VERSION"

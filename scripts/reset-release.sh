@@ -30,10 +30,6 @@ git rm -f scripts/create-devkit-release.sh
 git rm -f scripts/reset-release.sh
 git rm -f assets/images/mod-id-location.png
 git mv -f README-TEMPLATE.md README.md
-git mv -f .env-template .env
-
-# 8. Create .env from template for release
-cp -f .env-template .env
 
 # 9. Commit and Push
 git commit -m "$VERSION"
