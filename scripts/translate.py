@@ -39,6 +39,7 @@ METADATA_PATH = os.path.join(ROOT_DIR, ".metadata", "metadata.json")
 WORKSHOP_DESCRIPTION_PATH = os.path.join(ROOT_DIR, "assets", "workshop", "workshop-description.txt")
 WORKSHOP_TRANSLATIONS_DIR = os.path.join(ROOT_DIR, "assets", "workshop", "translations")
 WORKSHOP_TRANSLATION_FILENAME = "workshop_{lang}.txt"
+WORKSHOP_TRANSLATION_TEMPLATE_PATH = os.path.join(WORKSHOP_TRANSLATIONS_DIR, "translation_template.txt")
 WORKSHOP_TITLE_MARKER = "===WORKSHOP_TITLE==="
 WORKSHOP_DESCRIPTION_MARKER = "===WORKSHOP_DESCRIPTION==="
 
@@ -800,39 +801,6 @@ def load_workshop_description(description_path):
 		print(f"Warning: Failed to read workshop description '{description_path}': {e}")
 		return None
 
-def parse_workshop_translation(text):
-	"""Extract title/description sections from a combined workshop translation file."""
-	title = None
-	description = None
-	current = None
-	buffer = []
-
-	def flush():
-		nonlocal title, description, buffer, current
-		content = "".join(buffer)
-		if current == "title":
-			cleaned = content.strip()
-			title = cleaned if cleaned else None
-		elif current == "description":
-			description = content
-		buffer = []
-
-	for line in text.splitlines(keepends=True):
-		stripped = line.strip()
-		if stripped == WORKSHOP_TITLE_MARKER:
-			flush()
-			current = "title"
-			continue
-		if stripped == WORKSHOP_DESCRIPTION_MARKER:
-			flush()
-			current = "description"
-			continue
-		if current:
-			buffer.append(line)
-
-	flush()
-	return title, description
-
 def build_workshop_translation_text(title, description):
 	"""Build the combined workshop translation file content."""
 	parts = []
@@ -841,6 +809,49 @@ def build_workshop_translation_text(title, description):
 	if description is not None:
 		parts.append(f"{WORKSHOP_DESCRIPTION_MARKER}\n{description}")
 	return "".join(parts)
+
+def load_workshop_translation_template(template_path):
+	"""Load the translation template text if present and valid."""
+	if not os.path.exists(template_path):
+		return None
+	try:
+		with open(template_path, "r", encoding="utf-8") as f:
+			template = f.read()
+	except Exception as e:
+		print(f"Warning: Failed to read workshop translation template '{template_path}': {e}")
+		return None
+
+	if WORKSHOP_TITLE_MARKER not in template or WORKSHOP_DESCRIPTION_MARKER not in template:
+		print("Warning: translation_template.txt is missing required markers; falling back to default output.")
+		return None
+
+	return template
+
+def render_workshop_translation_text(
+	template,
+	translated_title,
+	translated_description,
+	original_title,
+	original_description,
+	translated_language,
+	original_language
+):
+	"""Render output using the template (or default format if missing)."""
+	if not template:
+		return build_workshop_translation_text(translated_title, translated_description)
+
+	replacements = {
+		"[Translated-Title]": translated_title or "",
+		"[Original-Title]": original_title or "",
+		"[Translated-Language]": translated_language or "",
+		"[Original-Language]": original_language or "",
+		"[Translated-Description]": translated_description or "",
+		"[Original-Description]": original_description or ""
+	}
+	output = template
+	for token, value in replacements.items():
+		output = output.replace(token, value)
+	return output
 
 def translate_workshop_title(translator, title, deepl_code, source_lang_deepl):
 	"""Translate the workshop title using DeepL."""
@@ -1025,6 +1036,7 @@ def translate_workshop_assets(
 	"""Translate workshop titles/descriptions and update cache metadata."""
 	title = load_workshop_title(METADATA_PATH)
 	description = load_workshop_description(WORKSHOP_DESCRIPTION_PATH)
+	translation_template = load_workshop_translation_template(WORKSHOP_TRANSLATION_TEMPLATE_PATH)
 
 	if title is None and description is None:
 		return False
@@ -1032,6 +1044,8 @@ def translate_workshop_assets(
 	os.makedirs(WORKSHOP_TRANSLATIONS_DIR, exist_ok=True)
 
 	workshop_cache = hash_data.setdefault("workshop", {})
+	# Cache raw translated title/description per language so template changes don't force retranslation.
+	translation_cache = workshop_cache.setdefault("translations", {})
 	description_changed = False
 	translator_changed = workshop_cache.get("description_translator") != workshop_description_translator
 	description_hash = None
@@ -1040,7 +1054,13 @@ def translate_workshop_assets(
 		# Re-translate when source text or provider changes.
 		description_changed = workshop_cache.get("description_hash") != description_hash or translator_changed
 
+	title_translator_changed = workshop_cache.get("title_translator") != workshop_title_translator
+	template_hash = hash_text(translation_template) if translation_template is not None else None
+	template_changed = template_hash != workshop_cache.get("template_hash")
+
 	description_success = True
+	title_success = True
+	cache_changed = False
 
 	for folder_name, deepl_code in TARGET_LANGUAGES.items():
 		if folder_name == source_language:
@@ -1050,19 +1070,13 @@ def translate_workshop_assets(
 			WORKSHOP_TRANSLATIONS_DIR,
 			WORKSHOP_TRANSLATION_FILENAME.format(lang=folder_name)
 		)
-		existing_title = None
-		existing_description = None
-		if os.path.exists(translation_path):
-			try:
-				with open(translation_path, "r", encoding="utf-8") as f:
-					existing_title, existing_description = parse_workshop_translation(f.read())
-			except Exception as e:
-				print(f"Warning: Failed to read workshop translation '{translation_path}': {e}")
-
 		file_changed = False
+		cache_entry = translation_cache.setdefault(folder_name, {})
+		cached_title = cache_entry.get("title")
+		cached_description = cache_entry.get("description")
 
 		if title:
-			if existing_title is None:
+			if cached_title is None or title_translator_changed:
 				provider_label = "gemini-3-flash" if workshop_title_translator == "gemini-3-flash" else "deepl"
 				print(f"Translating workshop title -> {folder_name} ({provider_label})...")
 				if workshop_title_translator == "gemini-3-flash":
@@ -1080,13 +1094,17 @@ def translate_workshop_assets(
 						source_lang_deepl
 					)
 				if translated_title is not None:
-					existing_title = translated_title
+					cached_title = translated_title
+					cache_entry["title"] = translated_title
+					cache_changed = True
 					file_changed = True
+				else:
+					title_success = False
 			else:
-				print(f"Workshop title exists -> {folder_name}; skipping.")
+				print(f"Workshop title cached -> {folder_name}; skipping.")
 
 		if description is not None:
-			needs_description = description_changed or existing_description is None
+			needs_description = description_changed or cached_description is None
 			if needs_description:
 				provider_label = "gemini-3-flash" if workshop_description_translator == "gemini-3-flash" else "deepl"
 				print(f"Translating workshop description -> {folder_name} ({provider_label})...")
@@ -1107,23 +1125,44 @@ def translate_workshop_assets(
 				if translated_description is None:
 					description_success = False
 					continue
-				existing_description = translated_description
+				cached_description = translated_description
+				cache_entry["description"] = translated_description
+				cache_changed = True
 				file_changed = True
 			else:
 				print(f"Workshop description unchanged -> {folder_name}; skipping.")
 
-		if file_changed or not os.path.exists(translation_path):
-			if existing_title is None and existing_description is None:
+		if file_changed or template_changed or not os.path.exists(translation_path):
+			if cached_title is None and cached_description is None:
 				continue
+			translated_language = LANGUAGE_DISPLAY_NAMES.get(folder_name, folder_name)
+			original_language = LANGUAGE_DISPLAY_NAMES.get(source_language, source_language)
+			output = render_workshop_translation_text(
+				translation_template,
+				cached_title,
+				cached_description,
+				title,
+				description,
+				translated_language,
+				original_language
+			)
 			with open(translation_path, "w", encoding="utf-8") as f:
-				f.write(build_workshop_translation_text(existing_title, existing_description))
+				f.write(output)
 
 	if description is not None and description_changed and description_success:
 		workshop_cache["description_hash"] = description_hash
 		workshop_cache["description_translator"] = workshop_description_translator
-		return True
+		cache_changed = True
 
-	return False
+	if title_success and workshop_cache.get("title_translator") != workshop_title_translator:
+		workshop_cache["title_translator"] = workshop_title_translator
+		cache_changed = True
+
+	if workshop_cache.get("template_hash") != template_hash:
+		workshop_cache["template_hash"] = template_hash
+		cache_changed = True
+
+	return cache_changed
 
 def main():
 	"""Script entry point."""

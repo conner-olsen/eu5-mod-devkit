@@ -1,0 +1,8 @@
+﻿===WORKSHOP_TITLE===
+[Translated-Title] / [Original-Title]
+===WORKSHOP_DESCRIPTION===
+[i]DeepL Generated [Translated-Language] Description[/i]
+[Translated-Description]
+
+[i]Native [Original-Language] Description[/i]
+[Original-Description]
