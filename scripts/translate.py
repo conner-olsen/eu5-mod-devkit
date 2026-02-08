@@ -10,10 +10,7 @@ import urllib.parse
 import urllib.error
 import deepl
 from dotenv import load_dotenv
-try:
-	import tomllib
-except ModuleNotFoundError:
-	tomllib = None
+import tomllib
 
 # ==========================================
 # CONFIGURATION
@@ -42,6 +39,8 @@ WORKSHOP_TRANSLATION_FILENAME = "workshop_{lang}.txt"
 WORKSHOP_TRANSLATION_TEMPLATE_PATH = os.path.join(WORKSHOP_TRANSLATIONS_DIR, "translation_template.txt")
 WORKSHOP_TITLE_MARKER = "===WORKSHOP_TITLE==="
 WORKSHOP_DESCRIPTION_MARKER = "===WORKSHOP_DESCRIPTION==="
+WORKSHOP_NO_TRANSLATE_BELOW = "--NO-TRANSLATE-BELOW--"
+WORKSHOP_ITEM_ID_TOKEN = "$item-id$"
 
 ALLOWED_WORKSHOP_DESCRIPTION_TRANSLATORS = {"deepl", "gemini-3-flash"}
 ALLOWED_WORKSHOP_TITLE_TRANSLATORS = {"deepl", "gemini-3-flash"}
@@ -102,53 +101,35 @@ DEEPL_SPLIT_SENTENCES_LOCALIZATION = deepl.api_data.SplitSentences.OFF
 # LOGIC
 # ==========================================
 
-def _parse_simple_config_value(raw_value):
-	"""Parse a simple TOML-style value into bool or string."""
-	value = raw_value.split("#", 1)[0].strip()
-	if len(value) >= 2 and ((value[0] == value[-1]) and value[0] in ("'", '"')):
-		value = value[1:-1]
-	lower = value.lower()
-	if lower in ("true", "false"):
-		return lower == "true"
-	return value
-
-def _load_simple_config(config_path):
-	"""Load a minimal key = value config without full TOML support."""
-	data = {}
-	with open(config_path, "r", encoding="utf-8") as f:
-		for line in f:
-			stripped = line.strip()
-			if not stripped or stripped.startswith("#"):
-				continue
-			key, sep, value = stripped.partition("=")
-			if not sep:
-				continue
-			key = key.strip()
-			if not key:
-				continue
-			data[key] = _parse_simple_config_value(value)
-	return data
+def _parse_positive_int(value, label):
+	"""Parse a positive integer from config values."""
+	try:
+		parsed = int(value)
+	except (TypeError, ValueError):
+		print(f"Error: {label} must be an integer.")
+		return None
+	if parsed <= 0:
+		print(f"Error: {label} must be a positive integer.")
+		return None
+	return parsed
 
 def load_config(config_path):
 	"""Load config.toml and validate required keys and values."""
 	if not os.path.exists(config_path):
 		print(f"Error: Config file not found: {config_path}")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 
 	try:
-		if tomllib:
-			with open(config_path, "rb") as f:
-				data = tomllib.load(f)
-		else:
-			data = _load_simple_config(config_path)
+		with open(config_path, "rb") as f:
+			data = tomllib.load(f)
 	except Exception as e:
 		print(f"Error reading config file: {e}")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 
 	source_language = data.get("source_language")
 	if not source_language:
 		print(f"Error: source_language not set in {config_path}")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 
 	source_language = str(source_language).strip().lower()
 
@@ -156,57 +137,69 @@ def load_config(config_path):
 		valid = ", ".join(sorted(LANGUAGE_CONFIG.keys()))
 		print(f"Error: Unsupported source_language '{source_language}'.")
 		print(f"Supported values: {valid}")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 
 	if "translate_workshop" not in data:
 		print(f"Error: translate_workshop not set in {config_path}")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 	translate_workshop = data.get("translate_workshop")
 	if not isinstance(translate_workshop, bool):
 		print("Error: translate_workshop must be a boolean (true/false).")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 
 	if "workshop_description_translator" not in data:
 		print(f"Error: workshop_description_translator not set in {config_path}")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 	workshop_description_translator = data.get("workshop_description_translator")
 	if not isinstance(workshop_description_translator, str):
 		print("Error: workshop_description_translator must be a string.")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 	if workshop_description_translator not in ALLOWED_WORKSHOP_DESCRIPTION_TRANSLATORS:
 		valid = ", ".join(sorted(ALLOWED_WORKSHOP_DESCRIPTION_TRANSLATORS))
 		print(f"Error: Unsupported workshop_description_translator '{workshop_description_translator}'.")
 		print(f"Supported values: {valid}")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 
 	if "workshop_title_translator" not in data:
 		print(f"Error: workshop_title_translator not set in {config_path}")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 	workshop_title_translator = data.get("workshop_title_translator")
 	if not isinstance(workshop_title_translator, str):
 		print("Error: workshop_title_translator must be a string.")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 	if workshop_title_translator not in ALLOWED_WORKSHOP_TITLE_TRANSLATORS:
 		valid = ", ".join(sorted(ALLOWED_WORKSHOP_TITLE_TRANSLATORS))
 		print(f"Error: Unsupported workshop_title_translator '{workshop_title_translator}'.")
 		print(f"Supported values: {valid}")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 
 	if "gemini_system_prompt" not in data:
 		print(f"Error: gemini_system_prompt not set in {config_path}")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 	gemini_system_prompt = data.get("gemini_system_prompt")
 	if not isinstance(gemini_system_prompt, str) or not gemini_system_prompt.strip():
 		print("Error: gemini_system_prompt must be a non-empty string.")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 
 	if "gemini_title_system_prompt" not in data:
 		print(f"Error: gemini_title_system_prompt not set in {config_path}")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
 	gemini_title_system_prompt = data.get("gemini_title_system_prompt")
 	if not isinstance(gemini_title_system_prompt, str) or not gemini_title_system_prompt.strip():
 		print("Error: gemini_title_system_prompt must be a non-empty string.")
-		return None, None, None, None, None, None
+		return None, None, None, None, None, None, None
+
+	workshop_item_id = None
+	if translate_workshop:
+		if "workshop_upload_item_id" not in data:
+			print(f"Error: workshop_upload_item_id not set in {config_path}")
+			return None, None, None, None, None, None, None
+		workshop_item_id = _parse_positive_int(
+			data.get("workshop_upload_item_id"),
+			"workshop_upload_item_id"
+		)
+		if workshop_item_id is None:
+			return None, None, None, None, None, None, None
 
 	return (
 		source_language,
@@ -214,7 +207,8 @@ def load_config(config_path):
 		workshop_description_translator,
 		gemini_system_prompt,
 		workshop_title_translator,
-		gemini_title_system_prompt
+		gemini_title_system_prompt,
+		workshop_item_id
 	)
 
 def get_translator():
@@ -802,6 +796,24 @@ def load_workshop_description(description_path):
 		print(f"Warning: Failed to read workshop description '{description_path}': {e}")
 		return None
 
+def split_workshop_description(text):
+	"""Split workshop description into translatable and source variants."""
+	if text is None:
+		return None, None
+	lines = text.splitlines(keepends=True)
+	for idx, line in enumerate(lines):
+		if line.strip() == WORKSHOP_NO_TRANSLATE_BELOW:
+			translatable = "".join(lines[:idx])
+			source_text = "".join(lines[:idx] + lines[idx + 1:])
+			return translatable, source_text
+	return text, text
+
+def apply_workshop_item_id(text, item_id):
+	"""Replace the $item-id$ token when an item id is available."""
+	if text is None or item_id is None:
+		return text
+	return text.replace(WORKSHOP_ITEM_ID_TOKEN, str(item_id))
+
 def build_workshop_translation_text(title, description):
 	"""Build the combined workshop translation file content."""
 	parts = []
@@ -843,12 +855,12 @@ def render_workshop_translation_text(
 
 	# Tokens are optional; missing values become empty strings.
 	replacements = {
-		"[Translated-Title]": translated_title or "",
-		"[Original-Title]": original_title or "",
-		"[Translated-Language]": translated_language or "",
-		"[Original-Language]": original_language or "",
-		"[Translated-Description]": translated_description or "",
-		"[Original-Description]": original_description or ""
+		"$Translated-Title$": translated_title or "",
+		"$Original-Title$": original_title or "",
+		"$Translated-Language$": translated_language or "",
+		"$Original-Language$": original_language or "",
+		"$Translated-Description$": translated_description or "",
+		"$Original-Description$": original_description or ""
 	}
 	output = template
 	for token, value in replacements.items():
@@ -1017,11 +1029,14 @@ def translate_workshop_assets(
 	workshop_description_translator,
 	gemini_system_prompt,
 	workshop_title_translator,
-	gemini_title_system_prompt
+	gemini_title_system_prompt,
+	workshop_item_id
 ):
 	"""Translate workshop titles/descriptions and update cache metadata."""
 	title = load_workshop_title(METADATA_PATH)
-	description = load_workshop_description(WORKSHOP_DESCRIPTION_PATH)
+	raw_description = load_workshop_description(WORKSHOP_DESCRIPTION_PATH)
+	translatable_description, _ = split_workshop_description(raw_description)
+	description = apply_workshop_item_id(translatable_description, workshop_item_id)
 	translation_template = load_workshop_translation_template(WORKSHOP_TRANSLATION_TEMPLATE_PATH)
 
 	if title is None and description is None:
@@ -1162,7 +1177,8 @@ def main():
 		workshop_description_translator,
 		gemini_system_prompt,
 		workshop_title_translator,
-		gemini_title_system_prompt
+		gemini_title_system_prompt,
+		workshop_item_id
 	) = load_config(CONFIG_PATH)
 	if not source_language:
 		return
@@ -1240,7 +1256,8 @@ def main():
 			workshop_description_translator,
 			gemini_system_prompt,
 			workshop_title_translator,
-			gemini_title_system_prompt
+			gemini_title_system_prompt,
+			workshop_item_id
 		) or hashes_modified
 
 	# Write cache only if something changed.

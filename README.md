@@ -21,8 +21,7 @@ eu5-mod-devkit/
 │       ├── thumbnail.psd          # Photoshop template for the thumbnail
 │       └── thumbnail-alt.psd      # Alternative Photoshop template for the thumbnail
 ├── scripts/                    # Automation scripts
-│   ├── dependencies/           # SteamworksPy DLLs, steam_appid.txt, and requirements.txt
-│   ├── steamworks/             # Manually downloaded steamworks python module
+│   ├── dependencies/           # SteamworksPy DLLs, steam_appid.txt, requirements.txt, and steamworks module
 │   ├── setup.py                 # Initial project setup script
 │   ├── prepare-release.py       # Auto-manages separate release and development versions of your mod
 │   ├── translate.py             # Auto-translate localization files with DeepL
@@ -115,6 +114,8 @@ It reads from `main_menu/localization/<source_language>` and writes translated `
 5. If using workshop translations:
    * Put your workshop description in `assets/workshop/workshop-description.txt`.
    * Your workshop title is pulled from `.metadata/metadata.json` (`name`), with a trailing ` Dev` removed if present.
+   * `$item-id$` in the description is replaced with `workshop_upload_item_id` before translating and uploading.
+   * Add `--NO-TRANSLATE-BELOW--` on its own line to exclude that line and anything below from translations (source uploads drop only the marker line).
 6. Install the dependencies using `pip install -r scripts/dependencies/requirements.txt` (if you ran the setup script, this is already done)
 
 #### Usage
@@ -143,8 +144,8 @@ You can customize the output format by editing `assets/workshop/translations/tra
 
 Rules:
 * Keep the `===WORKSHOP_TITLE===` and `===WORKSHOP_DESCRIPTION===` markers.
-* Available tokens: `[Translated-Title]`, `[Original-Title]`, `[Translated-Language]`, `[Original-Language]`,
-  `[Translated-Description]`, `[Original-Description]` (missing tokens are allowed).
+* Available tokens: `$Translated-Title$`, `$Original-Title$`, `$Translated-Language$`, `$Original-Language$`,
+  `$Translated-Description$`, `$Original-Description$` (missing tokens are allowed).
 * If the template is missing or invalid, the script falls back to the default output format.
 
 #### Limitations
@@ -157,14 +158,12 @@ Rules:
 Uploads Steam Workshop titles/descriptions for the native language and any translated workshop files.
 
 Setup:
-1. Make sure Steam is running and you are logged into the account that owns the workshop item.
+1. Make sure Steam is running, and you are logged into the account that owns the workshop item.
 2. Ensure your workshop description exists at `assets/workshop/workshop-description.txt`.
-3. (optional) Run `translate.py` with `translate_workshop = true` to generate:
-   * `assets/workshop/translations/workshop_<language>.txt`
-     * Contains both title and description, separated by `===WORKSHOP_TITLE===` and `===WORKSHOP_DESCRIPTION===`.
-4. Set the upload settings in `scripts/config.toml`:
+3. Set the upload settings in `scripts/config.toml`:
    * `workshop_upload_item_id` The numeric ID at the end of your mod's Workshop URL.
 	 ![mod-id-location.png](assets/images/mod-id-location.png)
+4. (optional) Run `translate.py` with `translate_workshop = true` to generate workshop page translations.
 
 To run:
 ```bash
