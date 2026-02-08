@@ -24,7 +24,7 @@ eu5-mod-devkit/
 │   ├── dependencies/           # SteamworksPy DLLs, steam_appid.txt, requirements.txt, and steamworks module
 │   ├── setup.py                 # Initial project setup script
 │   ├── prepare-release.py       # Auto-manages separate release and development versions of your mod
-│   ├── translate.py             # Auto-translate localization files with DeepL
+│   ├── translate.py             # Auto-translate localization files with DeepL or Gemini
 │   ├── upload-mod-pages.py      # Upload Steam Workshop title/description per language
 │   ├── create-devkit-release.sh # (Internal) Devkit release management
 │   └── reset-release.sh         # (Internal) Devkit release management
@@ -99,18 +99,20 @@ To use the script:
    * The `in_game/`, `main_menu/` and any other files specified in the `SOURCES` list of `scripts/prepare-release.py`.
 
 ### translate.py
-Auto-translates localization files using the DeepL API, and can optionally translate Steam Workshop titles/descriptions using DeepL or Gemini-3-Flash.
+Auto-translates localization files using DeepL or Gemini-3-Flash, and can optionally translate Steam Workshop titles/descriptions using DeepL or Gemini-3-Flash.
 It reads from `main_menu/localization/<source_language>` and writes translated `.yml` files for every EU5 supported language.
 
 #### Setup
 1. Copy `.env-template` to `.env`.
 2. Add your DeepL API key as `DEEPL_API_KEY=your_key_here`.
-3. If you plan to use Gemini for workshop translations, add `GEMINI_API_KEY=your_key_here` to `.env`.
+3. If you plan to use Gemini for localization or workshop translations, add `GEMINI_API_KEY=your_key_here` to `.env`.
 4. Review and change any settings you want in `scripts/config.toml`
    * `source_language` (english, french, german, spanish, polish, russian, simp_chinese, turkish, braz_por, japanese, korean)
+   * `localization_translator` (deepl or gemini-3-flash)
+   * `gemini_localization_system_prompt`
    * `translate_workshop` (true/false)
    * `workshop_description_translator` (deepl or gemini-3-flash)
-   * `gemini_system_prompt`
+   * `gemini_description_system_prompt`
    * `workshop_title_translator` (deepl or gemini-3-flash)
    * `gemini_title_system_prompt`
 5. If using workshop translations:
@@ -152,7 +154,7 @@ Rules:
 
 #### Limitations
 * DeepL's free tier allows 500k characters per month.
-* Gemini's free tier allows 20 requests per day, which allows 2x workshop descriptions, or 1x title+description per day.
+* Gemini's free tier allows 20 requests per day, which allows 2x workshop descriptions, or 1x title+description per day. Localization translation uses far more requests and will exceed the free tier quickly.
 * Machine translation is imperfect; expect occasional mistakes.
 * Gemini generally seems to perform better than DeepL for the workshop page translations but has lower limits.
 

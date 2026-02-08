@@ -44,6 +44,7 @@ WORKSHOP_ITEM_ID_TOKEN = "$item-id$"
 
 ALLOWED_WORKSHOP_DESCRIPTION_TRANSLATORS = {"deepl", "gemini-3-flash"}
 ALLOWED_WORKSHOP_TITLE_TRANSLATORS = {"deepl", "gemini-3-flash"}
+ALLOWED_LOCALIZATION_TRANSLATORS = {"deepl", "gemini-3-flash"}
 
 LANGUAGE_CONFIG = {
 	"english": {"deepl": "EN", "loc_id": "l_english"},
@@ -117,19 +118,19 @@ def load_config(config_path):
 	"""Load config.toml and validate required keys and values."""
 	if not os.path.exists(config_path):
 		print(f"Error: Config file not found: {config_path}")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 
 	try:
 		with open(config_path, "rb") as f:
 			data = tomllib.load(f)
 	except Exception as e:
 		print(f"Error reading config file: {e}")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 
 	source_language = data.get("source_language")
 	if not source_language:
 		print(f"Error: source_language not set in {config_path}")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 
 	source_language = str(source_language).strip().lower()
 
@@ -137,75 +138,98 @@ def load_config(config_path):
 		valid = ", ".join(sorted(LANGUAGE_CONFIG.keys()))
 		print(f"Error: Unsupported source_language '{source_language}'.")
 		print(f"Supported values: {valid}")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
+
+	if "localization_translator" not in data:
+		print(f"Error: localization_translator not set in {config_path}")
+		return None, None, None, None, None, None, None, None, None
+	localization_translator = data.get("localization_translator")
+	if not isinstance(localization_translator, str):
+		print("Error: localization_translator must be a string.")
+		return None, None, None, None, None, None, None, None, None
+	if localization_translator not in ALLOWED_LOCALIZATION_TRANSLATORS:
+		valid = ", ".join(sorted(ALLOWED_LOCALIZATION_TRANSLATORS))
+		print(f"Error: Unsupported localization_translator '{localization_translator}'.")
+		print(f"Supported values: {valid}")
+		return None, None, None, None, None, None, None, None, None
+
+	if "gemini_localization_system_prompt" not in data:
+		print(f"Error: gemini_localization_system_prompt not set in {config_path}")
+		return None, None, None, None, None, None, None, None, None
+	gemini_localization_system_prompt = data.get("gemini_localization_system_prompt")
+	if not isinstance(gemini_localization_system_prompt, str) or not gemini_localization_system_prompt.strip():
+		print("Error: gemini_localization_system_prompt must be a non-empty string.")
+		return None, None, None, None, None, None, None, None, None
 
 	if "translate_workshop" not in data:
 		print(f"Error: translate_workshop not set in {config_path}")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 	translate_workshop = data.get("translate_workshop")
 	if not isinstance(translate_workshop, bool):
 		print("Error: translate_workshop must be a boolean (true/false).")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 
 	if "workshop_description_translator" not in data:
 		print(f"Error: workshop_description_translator not set in {config_path}")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 	workshop_description_translator = data.get("workshop_description_translator")
 	if not isinstance(workshop_description_translator, str):
 		print("Error: workshop_description_translator must be a string.")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 	if workshop_description_translator not in ALLOWED_WORKSHOP_DESCRIPTION_TRANSLATORS:
 		valid = ", ".join(sorted(ALLOWED_WORKSHOP_DESCRIPTION_TRANSLATORS))
 		print(f"Error: Unsupported workshop_description_translator '{workshop_description_translator}'.")
 		print(f"Supported values: {valid}")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 
 	if "workshop_title_translator" not in data:
 		print(f"Error: workshop_title_translator not set in {config_path}")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 	workshop_title_translator = data.get("workshop_title_translator")
 	if not isinstance(workshop_title_translator, str):
 		print("Error: workshop_title_translator must be a string.")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 	if workshop_title_translator not in ALLOWED_WORKSHOP_TITLE_TRANSLATORS:
 		valid = ", ".join(sorted(ALLOWED_WORKSHOP_TITLE_TRANSLATORS))
 		print(f"Error: Unsupported workshop_title_translator '{workshop_title_translator}'.")
 		print(f"Supported values: {valid}")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 
-	if "gemini_system_prompt" not in data:
-		print(f"Error: gemini_system_prompt not set in {config_path}")
-		return None, None, None, None, None, None, None
-	gemini_system_prompt = data.get("gemini_system_prompt")
-	if not isinstance(gemini_system_prompt, str) or not gemini_system_prompt.strip():
-		print("Error: gemini_system_prompt must be a non-empty string.")
-		return None, None, None, None, None, None, None
+	if "gemini_description_system_prompt" not in data:
+		print(f"Error: gemini_description_system_prompt not set in {config_path}")
+		return None, None, None, None, None, None, None, None, None
+	gemini_description_system_prompt = data.get("gemini_description_system_prompt")
+	if not isinstance(gemini_description_system_prompt, str) or not gemini_description_system_prompt.strip():
+		print("Error: gemini_description_system_prompt must be a non-empty string.")
+		return None, None, None, None, None, None, None, None, None
 
 	if "gemini_title_system_prompt" not in data:
 		print(f"Error: gemini_title_system_prompt not set in {config_path}")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 	gemini_title_system_prompt = data.get("gemini_title_system_prompt")
 	if not isinstance(gemini_title_system_prompt, str) or not gemini_title_system_prompt.strip():
 		print("Error: gemini_title_system_prompt must be a non-empty string.")
-		return None, None, None, None, None, None, None
+		return None, None, None, None, None, None, None, None, None
 
 	workshop_item_id = None
 	if translate_workshop:
 		if "workshop_upload_item_id" not in data:
 			print(f"Error: workshop_upload_item_id not set in {config_path}")
-			return None, None, None, None, None, None, None
+			return None, None, None, None, None, None, None, None, None
 		workshop_item_id = _parse_positive_int(
 			data.get("workshop_upload_item_id"),
 			"workshop_upload_item_id"
 		)
 		if workshop_item_id is None:
-			return None, None, None, None, None, None, None
+			return None, None, None, None, None, None, None, None, None
 
 	return (
 		source_language,
 		translate_workshop,
+		localization_translator,
+		gemini_localization_system_prompt,
 		workshop_description_translator,
-		gemini_system_prompt,
+		gemini_description_system_prompt,
 		workshop_title_translator,
 		gemini_title_system_prompt,
 		workshop_item_id
@@ -481,7 +505,52 @@ def parse_source_entries(lines):
 
 	return entries
 
-def translate_value(translator, key, original_value, deepl_code, source_lang_deepl, target_folder_name, no_translate):
+def translate_localization_value_gemini(
+	masked_text,
+	placeholders,
+	target_language,
+	key,
+	target_folder_name,
+	system_prompt
+):
+	"""Translate a single localization value using Gemini."""
+	prompt = _build_gemini_system_prompt(system_prompt, target_language)
+	payload = {
+		"systemInstruction": {"parts": [{"text": prompt}]},
+		"contents": [
+			{"role": "user", "parts": [{"text": masked_text}]}
+		]
+	}
+
+	response = _gemini_generate_content(payload)
+	if response is None:
+		return None
+
+	translated_text = _gemini_extract_text(response)
+	if translated_text is None:
+		print("  [Error] Gemini API returned no text.")
+		return None
+
+	missing = missing_placeholder_indices(translated_text, placeholders)
+	if missing:
+		missing_tags = [placeholders[i] for i in missing]
+		print(f"  [WARNING] {target_folder_name} issue in '{key}': Missing tags: {missing_tags}")
+		translated_text = insert_missing_placeholders(translated_text, placeholders, missing)
+
+	translated_text = unmask_text_var(translated_text, placeholders)
+	return cleanup_text(translated_text)
+
+def translate_value(
+	translator,
+	key,
+	original_value,
+	deepl_code,
+	source_lang_deepl,
+	target_folder_name,
+	no_translate,
+	localization_translator,
+	gemini_localization_system_prompt
+):
 	"""
 	Translate a single value with tag masking and validation.
 	"""
@@ -492,6 +561,21 @@ def translate_value(translator, key, original_value, deepl_code, source_lang_dee
 
 	if should_auto_skip(masked_text):
 		return original_value
+
+	if localization_translator == "gemini-3-flash":
+		target_language = LANGUAGE_DISPLAY_NAMES.get(target_folder_name, target_folder_name)
+		translated_text = translate_localization_value_gemini(
+			masked_text,
+			placeholders,
+			target_language,
+			key,
+			target_folder_name,
+			gemini_localization_system_prompt
+		)
+		if translated_text is None:
+			print(f"  [Error] Failed to translate line: {key} (Gemini request failed)")
+			return original_value
+		return translated_text
 
 	try:
 		split_sentences = DEEPL_SPLIT_SENTENCES_LOCALIZATION if placeholders else None
@@ -574,7 +658,17 @@ def build_target_key_index(lines):
 			index[match.group(2)] = i
 	return index
 
-def update_target_lines(translator, target_lines, source_entries, changed_keys, deepl_code, source_lang_deepl, target_folder_name):
+def update_target_lines(
+	translator,
+	target_lines,
+	source_entries,
+	changed_keys,
+	deepl_code,
+	source_lang_deepl,
+	target_folder_name,
+	localization_translator,
+	gemini_localization_system_prompt
+):
 	"""
 	Update only keys that changed in the source (or are missing in the target).
 	"""
@@ -595,7 +689,9 @@ def update_target_lines(translator, target_lines, source_entries, changed_keys, 
 			deepl_code,
 			source_lang_deepl,
 			target_folder_name,
-			entry["no_translate"]
+			entry["no_translate"],
+			localization_translator,
+			gemini_localization_system_prompt
 		)
 
 		if key in target_index:
@@ -624,7 +720,16 @@ def update_target_lines(translator, target_lines, source_entries, changed_keys, 
 
 	return file_changed
 
-def translate_source_lines(translator, source_lines, target_folder_name, deepl_code, source_lang_id, source_lang_deepl):
+def translate_source_lines(
+	translator,
+	source_lines,
+	target_folder_name,
+	deepl_code,
+	source_lang_id,
+	source_lang_deepl,
+	localization_translator,
+	gemini_localization_system_prompt
+):
 	"""
 	Translate a full source file into a new target file.
 	"""
@@ -675,7 +780,9 @@ def translate_source_lines(translator, source_lines, target_folder_name, deepl_c
 				deepl_code,
 				source_lang_deepl,
 				target_folder_name,
-				False
+				False,
+				localization_translator,
+				gemini_localization_system_prompt
 			)
 
 			new_lines.append(build_line(indent, key, translated_text, comment))
@@ -694,7 +801,9 @@ def process_file(
 	deepl_code,
 	source_lang_id,
 	source_lang_deepl,
-	changed_keys
+	changed_keys,
+	localization_translator,
+	gemini_localization_system_prompt
 ):
 	"""Translate/update one localization file for a single target language."""
 	filename = os.path.basename(source_filepath)
@@ -717,7 +826,9 @@ def process_file(
 			target_folder_name,
 			deepl_code,
 			source_lang_id,
-			source_lang_deepl
+			source_lang_deepl,
+			localization_translator,
+			gemini_localization_system_prompt
 		)
 		with open(target_filepath, 'w', encoding='utf-8-sig') as f:
 			f.writelines(new_lines)
@@ -750,7 +861,9 @@ def process_file(
 		changed_keys,
 		deepl_code,
 		source_lang_deepl,
-		target_folder_name
+		target_folder_name,
+		localization_translator,
+		gemini_localization_system_prompt
 	) or file_changed
 
 	if file_changed:
@@ -1027,7 +1140,7 @@ def translate_workshop_assets(
 	source_lang_deepl,
 	hash_data,
 	workshop_description_translator,
-	gemini_system_prompt,
+	gemini_description_system_prompt,
 	workshop_title_translator,
 	gemini_title_system_prompt,
 	workshop_item_id
@@ -1114,7 +1227,7 @@ def translate_workshop_assets(
 					translated_description = translate_workshop_description_gemini(
 						description,
 						target_language,
-						gemini_system_prompt
+						gemini_description_system_prompt
 					)
 				else:
 					translated_description = translate_workshop_description(
@@ -1174,8 +1287,10 @@ def main():
 	(
 		source_language,
 		translate_workshop,
+		localization_translator,
+		gemini_localization_system_prompt,
 		workshop_description_translator,
-		gemini_system_prompt,
+		gemini_description_system_prompt,
 		workshop_title_translator,
 		gemini_title_system_prompt,
 		workshop_item_id
@@ -1232,7 +1347,9 @@ def main():
 						deepl_code,
 						source_lang_id,
 						source_lang_deepl,
-						changed_keys
+						changed_keys,
+						localization_translator,
+						gemini_localization_system_prompt
 					)
 
 				# Persist updated hashes for this file.
@@ -1254,7 +1371,7 @@ def main():
 			source_lang_deepl,
 			hash_data,
 			workshop_description_translator,
-			gemini_system_prompt,
+			gemini_description_system_prompt,
 			workshop_title_translator,
 			gemini_title_system_prompt,
 			workshop_item_id
