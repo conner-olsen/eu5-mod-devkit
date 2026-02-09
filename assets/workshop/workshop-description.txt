@@ -43,7 +43,7 @@ See the [url=https://steamcommunity.com/sharedfiles/filedetails/changelog/$item-
 
 [h1]Compatibility:[/h1]
 [list]
- [*]Not Ironman Compatible.
+ [*]Not Achievement Compatible.
  [*]Fully save game compatible.
  [*]Should work with any mod.
  [*]I may add compatibility patches upon request.
