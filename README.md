@@ -119,7 +119,6 @@ It reads from `main_menu/localization/<source_language>` and writes translated `
    * Put your workshop description in `assets/workshop/workshop-description.txt`.
    * Your workshop title is pulled from `.metadata/metadata.json` (`name`), with a trailing ` Dev` removed if present.
    * `$item-id$` in the description is replaced with `workshop_upload_item_id` before translating and uploading.
-   * Add `--NO-TRANSLATE-BELOW--` on its own line to exclude that line and anything below from translations (source uploads drop only the marker line).
 6. Install the dependencies using `pip install -r scripts/dependencies/requirements.txt` (if you ran the setup script, this is already done)
 
 #### Usage
@@ -130,9 +129,6 @@ python scripts/translate.py
 #### Behavior
 * Preserves EU5 localization tags like `[...], $...$, @...!, #...#!`.
 * Automatically skips lines that consist purely of tags or formatting characters.
-* Skip a line by adding `# NO_TRANSLATE` to the end.
-* Skip a block by wrapping it in `# NO_TRANSLATE BELOW` and `# NO_TRANSLATE END` (end marker optional).
-* Lock a translated output line by adding `# LOCK`; locked lines are never overwritten.
 
 #### Caching and Updates
 * Hashes are stored in `scripts/dependencies/.translate_hashes.json`; delete this file to force re-translation.
@@ -141,15 +137,23 @@ python scripts/translate.py
 * Workshop titles are generated once and never overwritten (delete the translated title files to force re-translation).
 * To disable an output language, remove its entry from `TARGET_LANGUAGES` in `scripts/translate.py`.
 
+#### Localization Tags
+* `# NO_TRANSLATE` skips a single line.
+* `# NO_TRANSLATE BELOW` skips the current line and everything below until the end marker.
+* `# NO_TRANSLATE END` ends a `# NO_TRANSLATE BELOW` block (optional; the block can run to EOF).
+* `# LOCK` prevents overwriting a translated output line.
+
+#### Workshop Tags and Tokens
+* `--NO-TRANSLATE-BELOW--` skips that line and anything below it for workshop translations.
+* `$item-id$` is replaced with `workshop_upload_item_id` before translation or upload.
+* `===WORKSHOP_TITLE===` marks the title block in translation outputs/templates.
+* `===WORKSHOP_DESCRIPTION===` marks the description block in translation outputs/templates.
+* `$Translated-Title$`, `$Original-Title$`, `$Translated-Language$`, `$Original-Language$`, `$Translated-Description$`, `$Original-Description$` are optional tokens for `assets/workshop/translations/translation_template.txt`.
+
 #### Workshop Output
 * Translated workshop titles/descriptions are written to `assets/workshop/translations/`.
-
-You can customize the output format by editing `assets/workshop/translations/translation_template.txt`.
-
-Rules:
-* Keep the `===WORKSHOP_TITLE===` and `===WORKSHOP_DESCRIPTION===` markers.
-* Available tokens: `$Translated-Title$`, `$Original-Title$`, `$Translated-Language$`, `$Original-Language$`,
-  `$Translated-Description$`, `$Original-Description$` (missing tokens are allowed).
+* You can customize the output format by editing `assets/workshop/translations/translation_template.txt`.
+* Keep the `===WORKSHOP_TITLE===` and `===WORKSHOP_DESCRIPTION===` markers in the template.
 * If the template is missing or invalid, the script falls back to the default output format.
 
 #### Limitations
