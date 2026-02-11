@@ -51,6 +51,7 @@ END {
 }
 ' "$config_path" > "$tmp_path"
 mv "$tmp_path" "$config_path"
+git add "$config_path"
 
 # 7. Commit and Push
 git commit -m "$VERSION"
