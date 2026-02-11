@@ -1,9 +1,12 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import stat
 import sys
+import time
+from contextlib import contextmanager
 
 import tomllib
 
@@ -13,6 +16,7 @@ DEPENDENCIES_DIR = os.path.join(SCRIPT_DIR, "dependencies")
 sys.path.insert(0, DEPENDENCIES_DIR)
 
 from steamworks import STEAMWORKS
+from steamworks.enums import EResult, EWorkshopFileType
 
 # --- User Configuration ---
 SOURCES = [
@@ -26,14 +30,19 @@ SOURCES = [
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.toml")
 APP_ID = 3450310
+CREATE_ITEM_TIMEOUT_SECONDS = 30
+CREATE_ITEM_POLL_INTERVAL_SECONDS = 0.1
+WORKSHOP_FILE_TYPE = EWorkshopFileType.COMMUNITY
 
-def _parse_int(value, label):
-    """Parse a positive integer with a friendly error message."""
+def _parse_int(value, label, allow_zero=False):
+    """Parse a positive integer (or zero when allowed) with a friendly error message."""
     try:
         parsed = int(value)
     except (TypeError, ValueError):
         print(f"Error: Invalid {label} '{value}'. Expected an integer.")
         return None
+    if parsed == 0 and allow_zero:
+        return 0
     if parsed <= 0:
         print(f"Error: Invalid {label} '{value}'. Expected a positive integer.")
         return None
@@ -53,20 +62,14 @@ def load_config(config_path):
 
     return data
 
-def load_workshop_item_id(config, dev_mode):
+def load_workshop_item_id(config, key, label):
     """Load the workshop item ID from config data."""
-    key = "workshop_upload_item_id_dev" if dev_mode else "workshop_upload_item_id"
-    label = "dev item id" if dev_mode else "item id"
-
     upload_item_id = config.get(key)
     if upload_item_id is None:
-        if dev_mode:
-            print("Error: workshop_upload_item_id_dev not set in config.toml.")
-        else:
-            print("Error: workshop_upload_item_id not set in config.toml.")
+        print(f"Error: {key} not set in config.toml.")
         return None
 
-    return _parse_int(upload_item_id, label)
+    return _parse_int(upload_item_id, label, allow_zero=True)
 
 def load_dev_name(config):
     """Load an optional dev mod name override from config data."""
@@ -75,6 +78,125 @@ def load_dev_name(config):
         return None
     dev_name = str(dev_name).strip()
     return dev_name if dev_name else None
+
+def update_config_value(config_path, key, value):
+    """Update a single key in config.toml while preserving comments."""
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except FileNotFoundError:
+        print(f"Error: Config file not found: {config_path}")
+        return False
+    except Exception as e:
+        print(f"Error reading config file: {e}")
+        return False
+
+    pattern = re.compile(rf"^(\s*{re.escape(key)}\s*=\s*)([^#]*?)(\s*)(#.*)?$")
+    updated = False
+    for idx, line in enumerate(lines):
+        match = pattern.match(line)
+        if match:
+            prefix, _old_value, gap, comment = match.groups()
+            comment = comment or ""
+            if comment and not gap:
+                gap = " "
+            elif not comment:
+                gap = ""
+            lines[idx] = f"{prefix}{value}{gap}{comment}".rstrip()
+            updated = True
+            break
+
+    if not updated:
+        lines.append(f"{key} = {value}")
+
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except Exception as e:
+        print(f"Error writing config file: {e}")
+        return False
+
+    return True
+
+@contextmanager
+def steamworks_session():
+    cwd_before = os.getcwd()
+    try:
+        os.chdir(DEPENDENCIES_DIR)
+        steam = STEAMWORKS()
+        steam.initialize()
+        yield steam
+    finally:
+        os.chdir(cwd_before)
+
+def create_workshop_item(steam):
+    result_holder = {"done": False, "result": None}
+
+    def on_created(result):
+        result_holder["done"] = True
+        result_holder["result"] = result
+
+    workshop = steam.Workshop
+    workshop.CreateItem(APP_ID, WORKSHOP_FILE_TYPE, callback=on_created)
+
+    start = time.time()
+    while not result_holder["done"]:
+        steam.run_callbacks()
+        time.sleep(CREATE_ITEM_POLL_INTERVAL_SECONDS)
+        if time.time() - start > CREATE_ITEM_TIMEOUT_SECONDS:
+            print("Error: Timed out while waiting for Workshop item creation.")
+            return None
+
+    result = result_holder["result"]
+    if result is None:
+        print("Error: Workshop item creation did not return a result.")
+        return None
+
+    try:
+        result_code = EResult(result.result)
+    except ValueError:
+        print(f"Error: Workshop item creation failed with unknown result code {result.result}.")
+        return None
+
+    if result_code != EResult.OK:
+        print(f"Error: Workshop item creation failed with result {result_code.name}.")
+        return None
+
+    if result.userNeedsToAcceptWorkshopLegalAgreement:
+        print("Warning: You must accept the Workshop legal agreement in Steam before uploading.")
+
+    new_id = int(result.publishedFileId)
+    if new_id <= 0:
+        print("Error: Workshop item creation returned an invalid published file id.")
+        return None
+
+    print(f"Created new Workshop item: {new_id}")
+    return new_id
+
+def ensure_item_id(steam, item_id, config_path, config_key):
+    if item_id != 0:
+        return item_id
+
+    print("Workshop item id is 0; creating a new Workshop item...")
+    new_id = create_workshop_item(steam)
+    if new_id is None:
+        return None
+
+    if update_config_value(config_path, config_key, new_id):
+        print(f"Updated {config_key} in {config_path}.")
+    else:
+        print(
+            f"Warning: Failed to update {config_path}. "
+            f"Please set {config_key} = {new_id} manually."
+        )
+
+    return new_id
+
+def _normalize_release_title(raw_name):
+    title = str(raw_name)
+    if title.endswith(" Dev"):
+        title = title[:-4].rstrip()
+    return title.strip()
 
 def build_release(dev_mode=False, dev_name=None):
     # --- Generate Release Folder Name ---
@@ -85,7 +207,13 @@ def build_release(dev_mode=False, dev_name=None):
             meta_data = json.load(f)
 
         raw_name = meta_data["name"]
-        base_name = dev_name if dev_mode and dev_name else raw_name
+        resolved_dev_name = dev_name if dev_mode and dev_name else raw_name
+        workshop_title = (
+            str(resolved_dev_name).strip()
+            if dev_mode
+            else _normalize_release_title(raw_name)
+        )
+        base_name = resolved_dev_name if dev_mode else raw_name
         clean_name = base_name.removesuffix(" Dev")
 
         clean_name = clean_name.lower().replace(" ", "-")
@@ -130,8 +258,7 @@ def build_release(dev_mode=False, dev_name=None):
         data = json.load(f)
 
     if dev_mode:
-        if dev_name:
-            data["name"] = dev_name
+        data["name"] = resolved_dev_name
     else:
         data["name"] = data["name"].removesuffix(" Dev")
         data["id"] = data["id"].removesuffix(".dev")
@@ -157,42 +284,42 @@ def build_release(dev_mode=False, dev_name=None):
         else:
             thumb_dest = None
 
-    return os.path.abspath(release_dir), os.path.abspath(thumb_dest) if thumb_dest else None
+    return (
+        os.path.abspath(release_dir),
+        os.path.abspath(thumb_dest) if thumb_dest else None,
+        workshop_title
+    )
 
-def upload_release(content_dir, preview_path, item_id):
+def upload_release(workshop, content_dir, preview_path, item_id, workshop_title=None):
     if not os.path.isdir(content_dir):
         print(f"Error: Release directory not found: {content_dir}")
         return False
 
-    cwd_before = os.getcwd()
-    try:
-        # SteamworksPy resolves DLL/appid from the current working directory.
-        os.chdir(DEPENDENCIES_DIR)
-        steam = STEAMWORKS()
-        steam.initialize()
-        workshop = steam.Workshop
+    handle = workshop.StartItemUpdate(APP_ID, item_id)
+    if not handle:
+        print("Error: StartItemUpdate failed. Check app ID and item ID.")
+        return False
 
-        handle = workshop.StartItemUpdate(APP_ID, item_id)
-        if not handle:
-            print("Error: StartItemUpdate failed. Check app ID and item ID.")
+    if workshop_title:
+        title_result = workshop.SetItemTitle(handle, workshop_title)
+        if title_result is False:
+            print("Error: SetItemTitle failed.")
             return False
 
-        content_result = workshop.SetItemContent(handle, content_dir)
-        if content_result is False:
-            print("Error: SetItemContent failed.")
+    content_result = workshop.SetItemContent(handle, content_dir)
+    if content_result is False:
+        print("Error: SetItemContent failed.")
+        return False
+
+    if preview_path:
+        preview_result = workshop.SetItemPreview(handle, preview_path)
+        if preview_result is False:
+            print("Error: SetItemPreview failed.")
             return False
 
-        if preview_path:
-            preview_result = workshop.SetItemPreview(handle, preview_path)
-            if preview_result is False:
-                print("Error: SetItemPreview failed.")
-                return False
-
-        workshop.SubmitItemUpdate(handle, "")
-        print("Workshop update submitted. Check Steam client for upload progress.")
-        return True
-    finally:
-        os.chdir(cwd_before)
+    workshop.SubmitItemUpdate(handle, "")
+    print("Workshop update submitted. Check Steam client for upload progress.")
+    return True
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Build and upload an EU5 mod to Steam Workshop.")
@@ -209,15 +336,21 @@ def main():
     if config is None:
         return 1
 
-    item_id = load_workshop_item_id(config, args.dev)
+    item_id_key = "workshop_upload_item_id_dev" if args.dev else "workshop_upload_item_id"
+    item_label = "dev item id" if args.dev else "item id"
+    item_id = load_workshop_item_id(config, item_id_key, item_label)
     if item_id is None:
         return 1
 
     dev_name = load_dev_name(config) if args.dev else None
-    release_dir, preview_path = build_release(dev_mode=args.dev, dev_name=dev_name)
+    release_dir, preview_path, workshop_title = build_release(dev_mode=args.dev, dev_name=dev_name)
 
-    if not upload_release(release_dir, preview_path, item_id):
-        return 1
+    with steamworks_session() as steam:
+        item_id = ensure_item_id(steam, item_id, CONFIG_PATH, item_id_key)
+        if item_id is None:
+            return 1
+        if not upload_release(steam.Workshop, release_dir, preview_path, item_id, workshop_title):
+            return 1
     return 0
 
 if __name__ == "__main__":

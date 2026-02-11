@@ -83,6 +83,7 @@ Builds a minimal release folder and uploads it to Steam Workshop.
 * Can more easily swap to the released version to verify reported issues.
 * Pushes the release version straight to Steam Workshop using the item id from `scripts/config.toml`.
 * Use `--dev` to upload a dev Workshop item with the dev thumbnail and name.
+* If the configured Workshop item id is `0`, the script will create a new item and write the id back to `scripts/config.toml`.
 
 To use the script:
 1. **Modify Metadata**: Edit `.metadata/metadata.json` adding ` Dev` and `.dev` to the name and id respectively.
@@ -91,8 +92,8 @@ To use the script:
    * Make the release thumbnail `.metadata/thumbnail-release.png` (if it does not exist, the `.metadata/thumbnail.png` will be used for both).
 3. **(optionally) Configure Included Files**: By default, the release version only includes the `.metadata/`, `in_game/` and `main_menu/` folders.
    * If you want to include more files (i.e., LICENSE), you can add them to the `SOURCES` list in `scripts/upload-mod.py`.
-4. **Set the Workshop item ID**: Update `workshop_upload_item_id` in `scripts/config.toml`.
-5. **(optional) Configure dev uploads**: Set `workshop_upload_item_id_dev` and `workshop_dev_name` in `scripts/config.toml` for `--dev`.
+4. **Set the Workshop item ID**: Update `workshop_upload_item_id` in `scripts/config.toml`, or set it to `0` to create a new item on first upload.
+5. **(optional) Configure dev uploads**: Set `workshop_upload_item_id_dev` (or `0` for first-time creation) and `workshop_dev_name` in `scripts/config.toml` for `--dev`.
 6. **Run `upload-mod.py`**: When ready to create/update the release version and upload it to the workshop (Steam must be running):
    ```bash
    python scripts/upload-mod.py
