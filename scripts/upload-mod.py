@@ -33,6 +33,7 @@ APP_ID = 3450310
 CREATE_ITEM_TIMEOUT_SECONDS = 30
 CREATE_ITEM_POLL_INTERVAL_SECONDS = 0.1
 WORKSHOP_FILE_TYPE = EWorkshopFileType.COMMUNITY
+SUBMODS_DIR_NAME = "sub_mods"
 
 def _parse_int(value, label, allow_zero=False):
     """Parse a positive integer (or zero when allowed) with a friendly error message."""
@@ -79,6 +80,19 @@ def load_dev_name(config):
     dev_name = str(dev_name).strip()
     return dev_name if dev_name else None
 
+def _replace_value_preserve_comment(line, key, value):
+    pattern = re.compile(rf"^(\s*{re.escape(key)}\s*=\s*)([^#]*?)(\s*)(#.*)?$")
+    match = pattern.match(line)
+    if not match:
+        return f"{key} = {value}"
+    prefix, _old_value, gap, comment = match.groups()
+    comment = comment or ""
+    if comment and not gap:
+        gap = " "
+    elif not comment:
+        gap = ""
+    return f"{prefix}{value}{gap}{comment}".rstrip()
+
 def update_config_value(config_path, key, value):
     """Update a single key in config.toml while preserving comments."""
     try:
@@ -91,18 +105,10 @@ def update_config_value(config_path, key, value):
         print(f"Error reading config file: {e}")
         return False
 
-    pattern = re.compile(rf"^(\s*{re.escape(key)}\s*=\s*)([^#]*?)(\s*)(#.*)?$")
     updated = False
     for idx, line in enumerate(lines):
-        match = pattern.match(line)
-        if match:
-            prefix, _old_value, gap, comment = match.groups()
-            comment = comment or ""
-            if comment and not gap:
-                gap = " "
-            elif not comment:
-                gap = ""
-            lines[idx] = f"{prefix}{value}{gap}{comment}".rstrip()
+        if re.match(rf"^\s*{re.escape(key)}\s*=", line):
+            lines[idx] = _replace_value_preserve_comment(line, key, value)
             updated = True
             break
 
@@ -191,6 +197,215 @@ def ensure_item_id(steam, item_id, config_path, config_key):
         )
 
     return new_id
+
+def _parse_submod_blocks(lines):
+    blocks = []
+    current = None
+
+    def finalize(end_index):
+        nonlocal current
+        if current is None:
+            return
+        current["end"] = end_index
+        blocks.append(current)
+        current = None
+
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("[[") and stripped.endswith("]]"):
+            finalize(idx - 1)
+            if stripped == "[[submods]]":
+                current = {
+                    "start": idx,
+                    "end": None,
+                    "mod_id": None,
+                    "mod_id_line": None,
+                    "workshop_id_line": None
+                }
+            continue
+
+        if current is None:
+            continue
+
+        match = re.match(r"^\s*mod_id\s*=\s*(.+?)(\s*#.*)?$", line)
+        if match:
+            value = match.group(1).strip()
+            if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+                value = value[1:-1]
+            current["mod_id"] = value
+            current["mod_id_line"] = idx
+            continue
+
+        match = re.match(r"^\s*workshop_id\s*=\s*(.+?)(\s*#.*)?$", line)
+        if match:
+            current["workshop_id_line"] = idx
+            continue
+
+    finalize(len(lines) - 1)
+    return blocks
+
+def update_submod_entry(config_path, mod_id, workshop_id):
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except FileNotFoundError:
+        print(f"Error: Config file not found: {config_path}")
+        return False
+    except Exception as e:
+        print(f"Error reading config file: {e}")
+        return False
+
+    blocks = _parse_submod_blocks(lines)
+    target = None
+    for block in blocks:
+        if block["mod_id"] == mod_id:
+            target = block
+            break
+
+    if target:
+        if target["workshop_id_line"] is not None:
+            idx = target["workshop_id_line"]
+            lines[idx] = _replace_value_preserve_comment(lines[idx], "workshop_id", workshop_id)
+        else:
+            insert_at = target["mod_id_line"] + 1 if target["mod_id_line"] is not None else target["start"] + 1
+            lines.insert(insert_at, f"workshop_id = {workshop_id}")
+    else:
+        if lines and lines[-1].strip():
+            lines.append("")
+        escaped_mod_id = str(mod_id).replace('"', '\\"')
+        lines.append("[[submods]]")
+        lines.append(f'mod_id = "{escaped_mod_id}"')
+        lines.append(f"workshop_id = {workshop_id}")
+
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except Exception as e:
+        print(f"Error writing config file: {e}")
+        return False
+
+    return True
+
+def load_submods_config(config):
+    entries = config.get("submods") or []
+    mapping = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        mod_id = entry.get("mod_id")
+        workshop_id = entry.get("workshop_id")
+        if mod_id is None or workshop_id is None:
+            continue
+        mod_id = str(mod_id).strip()
+        if not mod_id or mod_id in mapping:
+            continue
+        parsed_id = _parse_int(workshop_id, f"workshop id for {mod_id}", allow_zero=True)
+        if parsed_id is None:
+            continue
+        mapping[mod_id] = parsed_id
+    return mapping
+
+def _load_submod_metadata(mod_dir):
+    meta_path = os.path.join(mod_dir, ".metadata", "metadata.json")
+    if not os.path.exists(meta_path):
+        print(f"Warning: Missing metadata.json for submod at {mod_dir}.")
+        return None
+    try:
+        with open(meta_path, "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"Warning: Failed to read submod metadata '{meta_path}': {e}")
+        return None
+
+    mod_id = data.get("id")
+    if not mod_id:
+        print(f"Warning: Submod metadata missing 'id' at {meta_path}.")
+        return None
+    mod_id = str(mod_id).strip()
+    if not mod_id:
+        print(f"Warning: Submod metadata 'id' is blank at {meta_path}.")
+        return None
+
+    name = data.get("name")
+    name = str(name) if name is not None else None
+    if name is not None and not name:
+        name = None
+
+    return {
+        "id": mod_id,
+        "name": name,
+        "root": mod_dir,
+        "thumbnail": os.path.join(mod_dir, ".metadata", "thumbnail.png")
+    }
+
+def ensure_submod_item_id(steam, mod_id, workshop_id, config_path):
+    if workshop_id and workshop_id != 0:
+        return workshop_id
+
+    print(f"Submod '{mod_id}' has no Workshop id; creating a new Workshop item...")
+    new_id = create_workshop_item(steam)
+    if new_id is None:
+        return None
+
+    if update_submod_entry(config_path, mod_id, new_id):
+        print(f"Updated submods list in {config_path} for '{mod_id}'.")
+    else:
+        print(
+            f"Warning: Failed to update {config_path}. "
+            f"Please add workshop_id = {new_id} for mod_id = '{mod_id}'."
+        )
+
+    return new_id
+
+def upload_submods(steam, config):
+    submods_root = os.path.join(ROOT_DIR, SUBMODS_DIR_NAME)
+    if not os.path.isdir(submods_root):
+        print(f"Warning: submods folder not found: {submods_root}")
+        return True
+
+    mapping = load_submods_config(config)
+    success = True
+
+    entries = sorted(os.listdir(submods_root))
+    if not entries:
+        print(f"Warning: No submods found in {submods_root}.")
+        return True
+
+    for entry in entries:
+        mod_dir = os.path.join(submods_root, entry)
+        if not os.path.isdir(mod_dir):
+            continue
+
+        meta = _load_submod_metadata(mod_dir)
+        if meta is None:
+            success = False
+            continue
+
+        mod_id = meta["id"]
+        workshop_id = mapping.get(mod_id, 0)
+        workshop_id = _parse_int(workshop_id, f"workshop id for {mod_id}", allow_zero=True)
+        if workshop_id is None:
+            success = False
+            continue
+
+        workshop_id = ensure_submod_item_id(steam, mod_id, workshop_id, CONFIG_PATH)
+        if workshop_id is None:
+            success = False
+            continue
+        mapping[mod_id] = workshop_id
+
+        title = meta["name"]
+        if title is None:
+            print(f"Warning: Submod '{mod_id}' has no name; Workshop title will not be updated.")
+
+        preview_path = meta["thumbnail"]
+        if not os.path.exists(preview_path):
+            preview_path = None
+
+        if not upload_release(steam.Workshop, meta["root"], preview_path, workshop_id, title):
+            success = False
+
+    return success
 
 def _normalize_release_title(raw_name):
     title = str(raw_name)
@@ -328,6 +543,11 @@ def parse_args():
         action="store_true",
         help="Upload the dev Workshop item using dev metadata and thumbnail."
     )
+    parser.add_argument(
+        "--submods",
+        action="store_true",
+        help="Upload all submods found in the sub_mods folder."
+    )
     return parser.parse_args()
 
 def main():
@@ -351,6 +571,9 @@ def main():
             return 1
         if not upload_release(steam.Workshop, release_dir, preview_path, item_id, workshop_title):
             return 1
+        if args.submods:
+            if not upload_submods(steam, config):
+                return 1
     return 0
 
 if __name__ == "__main__":
