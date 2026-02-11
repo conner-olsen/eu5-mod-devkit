@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import shutil
@@ -38,8 +39,8 @@ def _parse_int(value, label):
         return None
     return parsed
 
-def load_workshop_item_id(config_path):
-    """Load the workshop item ID from config.toml."""
+def load_config(config_path):
+    """Load config.toml values needed for Workshop uploads."""
     try:
         with open(config_path, "rb") as f:
             data = tomllib.load(f)
@@ -50,14 +51,32 @@ def load_workshop_item_id(config_path):
         print(f"Error reading config file: {e}")
         return None
 
-    upload_item_id = data.get("workshop_upload_item_id")
+    return data
+
+def load_workshop_item_id(config, dev_mode):
+    """Load the workshop item ID from config data."""
+    key = "workshop_upload_item_id_dev" if dev_mode else "workshop_upload_item_id"
+    label = "dev item id" if dev_mode else "item id"
+
+    upload_item_id = config.get(key)
     if upload_item_id is None:
-        print("Error: workshop_upload_item_id not set in config.toml.")
+        if dev_mode:
+            print("Error: workshop_upload_item_id_dev not set in config.toml.")
+        else:
+            print("Error: workshop_upload_item_id not set in config.toml.")
         return None
 
-    return _parse_int(upload_item_id, "item id")
+    return _parse_int(upload_item_id, label)
 
-def build_release():
+def load_dev_name(config):
+    """Load an optional dev mod name override from config data."""
+    dev_name = config.get("workshop_dev_name")
+    if dev_name is None:
+        return None
+    dev_name = str(dev_name).strip()
+    return dev_name if dev_name else None
+
+def build_release(dev_mode=False, dev_name=None):
     # --- Generate Release Folder Name ---
     dev_meta_path = os.path.join(ROOT_DIR, ".metadata", "metadata.json")
 
@@ -66,10 +85,11 @@ def build_release():
             meta_data = json.load(f)
 
         raw_name = meta_data["name"]
-        clean_name = raw_name.removesuffix(" Dev")
+        base_name = dev_name if dev_mode and dev_name else raw_name
+        clean_name = base_name.removesuffix(" Dev")
 
         clean_name = clean_name.lower().replace(" ", "-")
-        target_folder_name = f"{clean_name}-release"
+        target_folder_name = f"{clean_name}-dev" if dev_mode else f"{clean_name}-release"
     else:
         raise FileNotFoundError(f"Metadata file not found at {dev_meta_path}")
 
@@ -109,8 +129,12 @@ def build_release():
     with open(dev_meta_path, "r", encoding="utf-8-sig") as f:
         data = json.load(f)
 
-    data["name"] = data["name"].removesuffix(" Dev")
-    data["id"] = data["id"].removesuffix(".dev")
+    if dev_mode:
+        if dev_name:
+            data["name"] = dev_name
+    else:
+        data["name"] = data["name"].removesuffix(" Dev")
+        data["id"] = data["id"].removesuffix(".dev")
 
     with open(dest_meta_path, "w", encoding="utf-8-sig") as f:
         json.dump(data, f, indent=4)
@@ -120,12 +144,18 @@ def build_release():
     thumb_std = os.path.join(ROOT_DIR, ".metadata", "thumbnail.png")
     thumb_dest = os.path.join(dest_meta_dir, "thumbnail.png")
 
-    if os.path.exists(thumb_release):
-        shutil.copy(thumb_release, thumb_dest)
-    elif os.path.exists(thumb_std):
-        shutil.copy(thumb_std, thumb_dest)
+    if dev_mode:
+        if os.path.exists(thumb_std):
+            shutil.copy(thumb_std, thumb_dest)
+        else:
+            thumb_dest = None
     else:
-        thumb_dest = None
+        if os.path.exists(thumb_release):
+            shutil.copy(thumb_release, thumb_dest)
+        elif os.path.exists(thumb_std):
+            shutil.copy(thumb_std, thumb_dest)
+        else:
+            thumb_dest = None
 
     return os.path.abspath(release_dir), os.path.abspath(thumb_dest) if thumb_dest else None
 
@@ -164,11 +194,27 @@ def upload_release(content_dir, preview_path, item_id):
     finally:
         os.chdir(cwd_before)
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Build and upload an EU5 mod to Steam Workshop.")
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Upload the dev Workshop item using dev metadata and thumbnail."
+    )
+    return parser.parse_args()
+
 def main():
-    release_dir, preview_path = build_release()
-    item_id = load_workshop_item_id(CONFIG_PATH)
+    args = parse_args()
+    config = load_config(CONFIG_PATH)
+    if config is None:
+        return 1
+
+    item_id = load_workshop_item_id(config, args.dev)
     if item_id is None:
         return 1
+
+    dev_name = load_dev_name(config) if args.dev else None
+    release_dir, preview_path = build_release(dev_mode=args.dev, dev_name=dev_name)
 
     if not upload_release(release_dir, preview_path, item_id):
         return 1

@@ -82,6 +82,7 @@ Builds a minimal release folder and uploads it to Steam Workshop.
 * Makes it easy to swap between for joining multiplayer sessions.
 * Can more easily swap to the released version to verify reported issues.
 * Pushes the release version straight to Steam Workshop using the item id from `scripts/config.toml`.
+* Use `--dev` to upload a dev Workshop item with the dev thumbnail and name.
 
 To use the script:
 1. **Modify Metadata**: Edit `.metadata/metadata.json` adding ` Dev` and `.dev` to the name and id respectively.
@@ -91,7 +92,8 @@ To use the script:
 3. **(optionally) Configure Included Files**: By default, the release version only includes the `.metadata/`, `in_game/` and `main_menu/` folders.
    * If you want to include more files (i.e., LICENSE), you can add them to the `SOURCES` list in `scripts/upload-mod.py`.
 4. **Set the Workshop item ID**: Update `workshop_upload_item_id` in `scripts/config.toml`.
-5. **Run `upload-mod.py`**: When ready to create/update the release version and upload it to the workshop (Steam must be running):
+5. **(optional) Configure dev uploads**: Set `workshop_upload_item_id_dev` and `workshop_dev_name` in `scripts/config.toml` for `--dev`.
+6. **Run `upload-mod.py`**: When ready to create/update the release version and upload it to the workshop (Steam must be running):
    ```bash
    python scripts/upload-mod.py
    ```
@@ -100,6 +102,11 @@ To use the script:
    * The thumbnail from `.metadata/thumbnail-release.png` or the default thumbnail if it doesn't exist.
    * The `in_game/`, `main_menu/` and any other files specified in the `SOURCES` list of `scripts/upload-mod.py`.
    * Uploads that release folder to the Workshop item specified in `scripts/config.toml`.
+7. **(optional) Run a dev upload**:
+   ```bash
+   python scripts/upload-mod.py --dev
+   ```
+   This will create a new folder `../mod-name-dev` and upload it using the dev Workshop item id, keeping the dev mod id and dev thumbnail.
 
 ### translate.py
 Auto-translates localization files using DeepL or Gemini-3-Flash, and can optionally translate Steam Workshop titles/descriptions using DeepL or Gemini-3-Flash.
