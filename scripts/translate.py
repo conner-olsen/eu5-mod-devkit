@@ -476,18 +476,18 @@ def should_auto_skip(masked_text):
 
 def parse_source_entries(lines):
 	"""
-	Parse all translatable key/value entries with NO_TRANSLATE flags.
+	Parse all translatable key/value entries with NO-TRANSLATE flags.
 	"""
 	entries = []
 	ignore_block_active = False
 
 	for line in lines:
-		if "# NO_TRANSLATE BELOW" in line:
+		if "# NO-TRANSLATE BELOW" in line:
 			ignore_block_active = True
-		if "# NO_TRANSLATE END" in line:
+		if "# NO-TRANSLATE END" in line:
 			ignore_block_active = False
 
-		no_translate = ignore_block_active or ("# NO_TRANSLATE" in line)
+		no_translate = ignore_block_active or ("# NO-TRANSLATE" in line)
 
 		match = KEY_VALUE_RE.match(line)
 		if match:
@@ -758,12 +758,12 @@ def translate_source_lines(
 			continue
 
 		# 2. Check for ignored lines
-		if "# NO_TRANSLATE BELOW" in line:
+		if "# NO-TRANSLATE BELOW" in line:
 			ignore_block_active = True
 			new_lines.append(line)
 			continue
 
-		if "# NO_TRANSLATE END" in line:
+		if "# NO-TRANSLATE END" in line:
 			ignore_block_active = False
 			new_lines.append(line)
 			continue
@@ -772,7 +772,7 @@ def translate_source_lines(
 			new_lines.append(line)
 			continue
 
-		if "# NO_TRANSLATE" in line:
+		if "# NO-TRANSLATE" in line:
 			new_lines.append(line)
 			continue
 
