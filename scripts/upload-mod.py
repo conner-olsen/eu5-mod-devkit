@@ -32,6 +32,7 @@ CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.toml")
 APP_ID = 3450310
 CREATE_ITEM_TIMEOUT_SECONDS = 30
 CREATE_ITEM_POLL_INTERVAL_SECONDS = 0.1
+POST_UPLOAD_DELAY_SECONDS = 3
 WORKSHOP_FILE_TYPE = EWorkshopFileType.COMMUNITY
 SUBMODS_DIR_NAME = "sub_mods"
 
@@ -457,7 +458,6 @@ def build_release(dev_mode=False, dev_name=None):
 
     release_dir = os.path.join(os.path.dirname(ROOT_DIR), target_folder_name)
 
-    # --- Functions ---
     # --- Script ---
 
     # 1. Clean and Recreate Release Directory
@@ -581,7 +581,6 @@ def main():
     release_dir, preview_path, workshop_title = build_release(dev_mode=args.dev, dev_name=dev_name)
 
     uploaded_main = False
-    submods_ok = True
 
     with steamworks_session() as steam:
         item_id = ensure_item_id(steam, item_id, CONFIG_PATH, item_id_key)
@@ -591,12 +590,12 @@ def main():
             return 1
         uploaded_main = True
         if args.submods:
-            submods_ok = upload_submods(steam, config)
-
+            if not upload_submods(steam, config):
+                return 1
     if uploaded_main:
+        if POST_UPLOAD_DELAY_SECONDS > 0:
+            time.sleep(POST_UPLOAD_DELAY_SECONDS)
         cleanup_release_dir(release_dir)
-    if not submods_ok:
-        return 1
     return 0
 
 if __name__ == "__main__":
