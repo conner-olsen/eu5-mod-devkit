@@ -32,8 +32,13 @@ CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.toml")
 APP_ID = 3450310
 CREATE_ITEM_TIMEOUT_SECONDS = 30
 CREATE_ITEM_POLL_INTERVAL_SECONDS = 0.1
+POST_UPLOAD_DELAY_SECONDS = 3
 WORKSHOP_FILE_TYPE = EWorkshopFileType.COMMUNITY
 SUBMODS_DIR_NAME = "sub_mods"
+
+def _on_rm_error(func, path, exc_info):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
 
 def _parse_int(value, label, allow_zero=False):
     """Parse a positive integer (or zero when allowed) with a friendly error message."""
@@ -197,6 +202,21 @@ def ensure_item_id(steam, item_id, config_path, config_key):
         )
 
     return new_id
+
+def cleanup_release_dir(release_dir):
+    if not release_dir:
+        return
+    release_dir = os.path.abspath(release_dir)
+    if not os.path.isdir(release_dir):
+        return
+    if release_dir == ROOT_DIR:
+        print(f"Warning: Refusing to remove release folder at root: {release_dir}")
+        return
+    if os.path.dirname(release_dir) != os.path.dirname(ROOT_DIR):
+        print(f"Warning: Refusing to remove release folder outside repo parent: {release_dir}")
+        return
+    shutil.rmtree(release_dir, onerror=_on_rm_error)
+    print(f"Removed release folder: {release_dir}")
 
 def _parse_submod_blocks(lines):
     blocks = []
@@ -438,16 +458,11 @@ def build_release(dev_mode=False, dev_name=None):
 
     release_dir = os.path.join(os.path.dirname(ROOT_DIR), target_folder_name)
 
-    # --- Functions ---
-    def on_rm_error(func, path, exc_info):
-        os.chmod(path, stat.S_IWRITE)
-        func(path)
-
     # --- Script ---
 
     # 1. Clean and Recreate Release Directory
     if os.path.exists(release_dir):
-        shutil.rmtree(release_dir, onerror=on_rm_error)
+        shutil.rmtree(release_dir, onerror=_on_rm_error)
 
     os.makedirs(release_dir)
 
@@ -565,15 +580,22 @@ def main():
     dev_name = load_dev_name(config) if args.dev else None
     release_dir, preview_path, workshop_title = build_release(dev_mode=args.dev, dev_name=dev_name)
 
+    uploaded_main = False
+
     with steamworks_session() as steam:
         item_id = ensure_item_id(steam, item_id, CONFIG_PATH, item_id_key)
         if item_id is None:
             return 1
         if not upload_release(steam.Workshop, release_dir, preview_path, item_id, workshop_title):
             return 1
+        uploaded_main = True
         if args.submods:
             if not upload_submods(steam, config):
                 return 1
+    if uploaded_main:
+        if POST_UPLOAD_DELAY_SECONDS > 0:
+            time.sleep(POST_UPLOAD_DELAY_SECONDS)
+        cleanup_release_dir(release_dir)
     return 0
 
 if __name__ == "__main__":
