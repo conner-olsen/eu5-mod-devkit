@@ -23,7 +23,7 @@ eu5-mod-devkit/
 ├── scripts/                    # Automation scripts
 │   ├── dependencies/           # SteamworksPy DLLs, steam_appid.txt, requirements.txt, and steamworks module
 │   ├── setup.py                 # Initial project setup script
-│   ├── prepare-release.py       # Auto-manages separate release and development versions of your mod
+│   ├── upload-mod.py            # Build a minimal release folder and upload it to Steam Workshop
 │   ├── translate.py             # Auto-translate localization files with DeepL or Gemini
 │   ├── upload-mod-pages.py      # Upload Steam Workshop title/description per language
 │   ├── create-devkit-release.sh # (Internal) Devkit release management
@@ -75,12 +75,13 @@ If you are familiar with Git, you can also manually add the remote for ease of u
 
 ## Provided Tools
 
-### prepare-release.py
-Auto-manages separate release and development versions of your mod. This has multiple benefits such as:
+### upload-mod.py
+Builds a minimal release folder and uploads it to Steam Workshop.
 * Tooling, git files, and anything else you don't want on the workshop will get omitted from the release version.
 * Separate IDs, names, and (optionally) thumbnails allow you to easily swap between your dev, and workshop versions through the in-game mod manager.
 * Makes it easy to swap between for joining multiplayer sessions.
-* Can more easily swap to the released version to look verify reported issues.
+* Can more easily swap to the released version to verify reported issues.
+* Pushes the release version straight to Steam Workshop using the item id from `scripts/config.toml`.
 
 To use the script:
 1. **Modify Metadata**: Edit `.metadata/metadata.json` adding ` Dev` and `.dev` to the name and id respectively.
@@ -88,15 +89,17 @@ To use the script:
    * The dev thumbnail will use `.metadata/thumbnail.png`.
    * Make the release thumbnail `.metadata/thumbnail-release.png` (if it does not exist, the `.metadata/thumbnail.png` will be used for both).
 3. **(optionally) Configure Included Files**: By default, the release version only includes the `.metadata/`, `in_game/` and `main_menu/` folders.
-   * If you want to include more files (i.e., LICENSE), you can add them to the `SOURCES` list in `scripts/prepare-release.py`.
-4. **Run `prepare-release.py`**: When ready to create/update the release version to upload to the workshop:
+   * If you want to include more files (i.e., LICENSE), you can add them to the `SOURCES` list in `scripts/upload-mod.py`.
+4. **Set the Workshop item ID**: Update `workshop_upload_item_id` in `scripts/config.toml`.
+5. **Run `upload-mod.py`**: When ready to create/update the release version and upload it to the workshop (Steam must be running):
    ```bash
-   python scripts/prepare-release.py
+   python scripts/upload-mod.py
    ```
    This will create a new folder `../mod-name-release` with:
    * The metadata.json file from `.metadata/` with " Dev" and ".dev" removed from the name and id respectively.
    * The thumbnail from `.metadata/thumbnail-release.png` or the default thumbnail if it doesn't exist.
-   * The `in_game/`, `main_menu/` and any other files specified in the `SOURCES` list of `scripts/prepare-release.py`.
+   * The `in_game/`, `main_menu/` and any other files specified in the `SOURCES` list of `scripts/upload-mod.py`.
+   * Uploads that release folder to the Workshop item specified in `scripts/config.toml`.
 
 ### translate.py
 Auto-translates localization files using DeepL or Gemini-3-Flash, and can optionally translate Steam Workshop titles/descriptions using DeepL or Gemini-3-Flash.
