@@ -658,6 +658,18 @@ def build_target_key_index(lines):
 			index[match.group(2)] = i
 	return index
 
+def prune_target_lines(target_lines, source_keys):
+	"""Remove translated lines whose keys no longer exist in the source."""
+	new_lines = []
+	removed_count = 0
+	for line in target_lines:
+		match = KEY_VALUE_RE.match(line)
+		if match and match.group(2) not in source_keys:
+			removed_count += 1
+			continue
+		new_lines.append(line)
+	return new_lines, removed_count
+
 def update_target_lines(
 	translator,
 	target_lines,
@@ -838,7 +850,9 @@ def process_file(
 		target_lines = f.readlines()
 
 	target_index = build_target_key_index(target_lines)
+	source_keys = {entry["key"] for entry in source_entries}
 	has_missing_keys = any(entry["key"] not in target_index for entry in source_entries)
+	has_removed_keys = any(key not in source_keys for key in target_index)
 	header_needs_update = False
 	for line in target_lines:
 		if HEADER_RE.match(line.strip()):
@@ -846,7 +860,7 @@ def process_file(
 			break
 
 	# Skip work if nothing changed and the header matches.
-	if not changed_keys and not has_missing_keys and not header_needs_update:
+	if not changed_keys and not has_missing_keys and not has_removed_keys and not header_needs_update:
 		print(f"No changes for {filename} -> {target_folder_name}; skipping.")
 		return
 
@@ -854,6 +868,11 @@ def process_file(
 
 	# Update only changed or missing keys; preserve everything else.
 	file_changed = ensure_target_header(target_lines, new_lang_id)
+	if has_removed_keys:
+		target_lines, removed_count = prune_target_lines(target_lines, source_keys)
+		if removed_count:
+			file_changed = True
+			print(f"  Removed {removed_count} obsolete keys from {filename} -> {target_folder_name}.")
 	file_changed = update_target_lines(
 		translator,
 		target_lines,
