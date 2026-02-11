@@ -166,9 +166,9 @@ python scripts/translate.py
 * To disable an output language, remove its entry from `TARGET_LANGUAGES` in `scripts/translate.py`.
 
 #### Localization Tags
-* `# NO_TRANSLATE` skips a single line.
-* `# NO_TRANSLATE BELOW` skips the current line and everything below until the end marker.
-* `# NO_TRANSLATE END` ends a `# NO_TRANSLATE BELOW` block (optional; the block can run to EOF).
+* `# NO-TRANSLATE` skips a single line.
+* `# NO-TRANSLATE BELOW` skips the current line and everything below until the end marker.
+* `# NO-TRANSLATE END` ends a `# NO-TRANSLATE BELOW` block (optional; the block can run to EOF).
 * `# LOCK` prevents overwriting a translated output line.
 
 #### Workshop Tags and Tokens
