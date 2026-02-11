@@ -65,3 +65,6 @@ git push origin devkit-release
 
 # 10. Return to main
 git checkout main
+
+# 11. Discard local config changes on main
+git checkout -- scripts/config.toml
