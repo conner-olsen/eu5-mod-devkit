@@ -25,7 +25,11 @@ def run_git(args, cwd=ROOT_DIR, check=True):
     except subprocess.CalledProcessError as e:
         if not check:
             return None
-        print(f"Git Error: {' '.join(args)}\n{e.stderr}")
+        print(f"Git Error: {' '.join(args)}")
+        if e.stdout:
+            print(e.stdout.strip())
+        if e.stderr:
+            print(e.stderr.strip())
         sys.exit(1)
 
 def run_pip(args, cwd=ROOT_DIR, check=True):
@@ -43,6 +47,19 @@ def run_pip(args, cwd=ROOT_DIR, check=True):
             return None
         print(f"Pip Error: {e}")
         sys.exit(1)
+
+def has_merge_head():
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"],
+            cwd=ROOT_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
 
 def _env_key_from_line(line):
     stripped = line.strip()
@@ -157,14 +174,17 @@ run_git([
     f"{REMOTE_NAME}/{REMOTE_BRANCH}"
 ])
 
-# --- CLEANUP STEP 1: Remove temporary files from the merge commit ---
-# 1. Remove the setup script so it isn't committed
-run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
-# 2. Remove the dummy file so it isn't committed
-run_git(["rm", "-f", "--ignore-unmatch", "in_game/common/dummy.txt"], check=False)
+if has_merge_head():
+    # --- CLEANUP STEP 1: Remove temporary files from the merge commit ---
+    # 1. Remove the setup script so it isn't committed
+    run_git(["rm", "-f", "--ignore-unmatch", "scripts/setup.py"], check=False)
+    # 2. Remove the dummy file so it isn't committed
+    run_git(["rm", "-f", "--ignore-unmatch", "in_game/common/dummy.txt"], check=False)
 
-# Finalize the commit.
-run_git(["commit", "-m", "Link devkit history"])
+    # Finalize the commit.
+    run_git(["commit", "-m", "Link devkit history"])
+else:
+    print("Devkit history already linked. Skipping history merge commit.")
 
 # Collect final status messages to print at the end so pip output doesn't trail them.
 final_messages = []
