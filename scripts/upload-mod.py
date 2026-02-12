@@ -33,10 +33,17 @@ APP_ID = 3450310
 CREATE_ITEM_TIMEOUT_SECONDS = 30
 CREATE_ITEM_POLL_INTERVAL_SECONDS = 0.1
 POST_UPLOAD_DELAY_SECONDS = 3
+CLEANUP_RETRY_DELAY_SECONDS = 3
+CLEANUP_MAX_ATTEMPTS = 20
 WORKSHOP_FILE_TYPE = EWorkshopFileType.COMMUNITY
 SUBMODS_DIR_NAME = "sub_mods"
 
 def _on_rm_error(func, path, exc_info):
+    exc = exc_info[1]
+    winerror = getattr(exc, "winerror", None)
+    errno = getattr(exc, "errno", None)
+    if winerror == 32 or errno == 16:
+        raise exc
     os.chmod(path, stat.S_IWRITE)
     func(path)
 
@@ -205,18 +212,35 @@ def ensure_item_id(steam, item_id, config_path, config_key):
 
 def cleanup_release_dir(release_dir):
     if not release_dir:
-        return
+        return False
     release_dir = os.path.abspath(release_dir)
     if not os.path.isdir(release_dir):
-        return
+        return False
     if release_dir == ROOT_DIR:
         print(f"Warning: Refusing to remove release folder at root: {release_dir}")
-        return
+        return False
     if os.path.dirname(release_dir) != os.path.dirname(ROOT_DIR):
         print(f"Warning: Refusing to remove release folder outside repo parent: {release_dir}")
-        return
-    shutil.rmtree(release_dir, onerror=_on_rm_error)
-    print(f"Removed release folder: {release_dir}")
+        return False
+
+    for attempt in range(1, CLEANUP_MAX_ATTEMPTS + 1):
+        try:
+            shutil.rmtree(release_dir, onerror=_on_rm_error)
+            print(f"Removed release folder: {release_dir}")
+            return True
+        except OSError as e:
+            winerror = getattr(e, "winerror", None)
+            errno = getattr(e, "errno", None)
+            if winerror == 32 or errno == 16:
+                if attempt == CLEANUP_MAX_ATTEMPTS:
+                    print(f"Warning: Release folder still in use: {release_dir}")
+                    return False
+                time.sleep(CLEANUP_RETRY_DELAY_SECONDS)
+                continue
+            print(f"Warning: Failed to remove release folder: {e}")
+            return False
+
+    return False
 
 def _parse_submod_blocks(lines):
     blocks = []
