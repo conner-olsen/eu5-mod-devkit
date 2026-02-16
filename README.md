@@ -84,7 +84,7 @@ Builds a minimal release folder and uploads it to Steam Workshop.
 * Pushes the release version straight to Steam Workshop using the item id from `scripts/config.toml`.
 * Use `--dev` to upload a dev Workshop item with the dev thumbnail and name.
 * If the configured Workshop item id is `0`, the script will create a new item and write the id back to `scripts/config.toml`.
-* Use `--submods` to upload submods from `sub_mods/` using the `[[submods]]` mapping in `scripts/config.toml`.
+* Use `--submods` to upload submods from `submods/` using the `[[submods]]` mapping in `scripts/config.toml`.
 
 To use the script:
 1. **Modify Metadata**: Edit `.metadata/metadata.json` adding ` Dev` and `.dev` to the name and id respectively.
@@ -105,7 +105,7 @@ To use the script:
    mod_id = "my_submod_2"
    workshop_id = 0
    ```
-   Any submod found in `sub_mods/` without a matching `mod_id` entry will be uploaded as a new Workshop item and written back to the config.
+   Any submod found in `submods/` without a matching `mod_id` entry will be uploaded as a new Workshop item and written back to the config.
 7. **Run `upload-mod.py`**: When ready to create/update the release version and upload it to the workshop (Steam must be running):
    ```bash
    python scripts/upload-mod.py
@@ -124,7 +124,7 @@ To use the script:
    ```bash
    python scripts/upload-mod.py --submods
    ```
-   This will upload every submod in `sub_mods/` using its metadata `id` and `name`, creating Workshop items as needed.
+   This will upload every submod in `submods/` using its metadata `id` and `name`, creating Workshop items as needed.
 
 ### translate.py
 Auto-translates localization files using DeepL or Gemini-3-Flash, and can optionally translate Steam Workshop titles/descriptions using DeepL or Gemini-3-Flash.
