@@ -36,7 +36,7 @@ POST_UPLOAD_DELAY_SECONDS = 3
 CLEANUP_RETRY_DELAY_SECONDS = 3
 CLEANUP_MAX_ATTEMPTS = 20
 WORKSHOP_FILE_TYPE = EWorkshopFileType.COMMUNITY
-SUBMODS_DIR_NAME = "sub_mods"
+SUBMODS_DIR_NAME = "submods"
 
 def _on_rm_error(func, path, exc_info):
     exc = exc_info[1]
@@ -585,7 +585,7 @@ def parse_args():
     parser.add_argument(
         "--submods",
         action="store_true",
-        help="Upload all submods found in the sub_mods folder."
+        help="Upload all submods found in the submods folder."
     )
     return parser.parse_args()
 
