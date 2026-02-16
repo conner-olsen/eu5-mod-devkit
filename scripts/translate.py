@@ -292,16 +292,11 @@ def mask_text_var(text):
 		placeholders.append(match.group(0))
 		return f'[VAR_{idx}]'
 
-	# 0. Protect escaped newlines so they survive translation.
-	text = re.sub(r'(\\n)', replace_match, text)
-	# 1. Protect [...]
-	text = re.sub(r'(\[.*?\])', replace_match, text)
-	# 2. Protect $...$
-	text = re.sub(r'(\$.*?\$)', replace_match, text)
-	# 3. Protect @...!
-	text = re.sub(r'(@[a-zA-Z0-9_]+!?)', replace_match, text)
-	# 4. Protect #...#!
-	text = re.sub(r'(#[a-zA-Z0-9_]+|#!)', replace_match, text)
+	# Single pass prevents already-masked [VAR_x] tokens from being re-masked.
+	pattern = re.compile(
+		r'(\\n|\[.*?\]|\$.*?\$|@[a-zA-Z0-9_]+!?|#[a-zA-Z0-9_]+|#!)'
+	)
+	text = pattern.sub(replace_match, text)
 
 	return text, placeholders
 
