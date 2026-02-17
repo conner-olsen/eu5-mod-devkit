@@ -19,12 +19,12 @@
  [*][b]...[/b]
 [/olist]
 
-[h2]Native Localizations:[/h2]
+[h1]Native Localizations:[/h1]
 [list]
  [*][b]English:[/b] Primary
 [/list]
 
-[h2]DeepL-Translated Localizations:[/h2]
+[h1]DeepL-Translated Localizations:[/h1]
 [list]
  [*][b]Chinese / 中文[/b]
  [*][b]French / Français[/b]
